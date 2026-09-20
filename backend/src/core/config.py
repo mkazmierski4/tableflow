@@ -4,6 +4,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_SECRET_KEY = "change-me"
+API_V1_PREFIX = "/api/v1"
 
 
 class Settings(BaseSettings):
@@ -14,7 +15,7 @@ class Settings(BaseSettings):
     app_name: str = "TableFlow"
     app_env: str = "development"
     debug: bool = False
-    api_v1_prefix: str = "/api/v1"
+    api_v1_prefix: str = API_V1_PREFIX
 
     database_url: str = "sqlite+aiosqlite:///./tableflow.db"
 
