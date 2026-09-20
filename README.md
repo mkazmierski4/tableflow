@@ -1,5 +1,7 @@
 # TableFlow
 
+[![Backend CI](https://github.com/mkazmierski4/tableflow/actions/workflows/backend.yml/badge.svg)](https://github.com/mkazmierski4/tableflow/actions/workflows/backend.yml)
+
 **Modern Restaurant Reservation & Table Management System**
 
 An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via Expo) that lets guests book a table in seconds and gives restaurant staff a live view of the floor — with **guaranteed protection against double-booking**.
