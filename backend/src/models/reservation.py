@@ -60,6 +60,10 @@ class Reservation(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     table_id: Mapped[int] = mapped_column(ForeignKey("tables.id", ondelete="RESTRICT"))
+    # Who booked; kept nullable so history survives account deletion.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), default=None, index=True
+    )
     start_at: Mapped[datetime]
     end_at: Mapped[datetime]
     party_size: Mapped[int]

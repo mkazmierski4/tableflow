@@ -3,9 +3,11 @@ class DomainError(Exception):
 
     code = "domain_error"
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str, *, code: str | None = None) -> None:
         super().__init__(message)
         self.message = message
+        if code is not None:
+            self.code = code
 
 
 class NotFoundError(DomainError):
@@ -36,3 +38,27 @@ class InvalidReservationStateError(DomainError):
 
 class DuplicateTableError(DomainError):
     code = "duplicate_table_label"
+
+
+class AuthenticationError(DomainError):
+    """Missing, invalid or expired credentials (HTTP 401)."""
+
+    code = "invalid_credentials"
+
+
+class PermissionDeniedError(DomainError):
+    """Authenticated, but the role is not allowed to do this (HTTP 403)."""
+
+    code = "forbidden"
+
+
+class EmailAlreadyRegisteredError(DomainError):
+    code = "email_taken"
+
+
+class TableHasReservationsError(DomainError):
+    code = "table_has_reservations"
+
+
+class InvalidUserUpdateError(DomainError):
+    code = "invalid_user_update"
