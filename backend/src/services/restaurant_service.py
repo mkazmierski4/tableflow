@@ -1,10 +1,10 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions import DuplicateTableError, NotFoundError
+from src.core.exceptions import DuplicateTableError, InvalidRestaurantUpdateError, NotFoundError
 from src.models import DiningTable, Restaurant
-from src.schemas import RestaurantCreate, TableCreate
+from src.schemas import RestaurantCreate, RestaurantUpdate, TableCreate
 
 
 async def create_restaurant(session: AsyncSession, data: RestaurantCreate) -> Restaurant:
@@ -18,6 +18,34 @@ async def get_restaurant(session: AsyncSession, restaurant_id: int) -> Restauran
     restaurant = await session.get(Restaurant, restaurant_id)
     if restaurant is None:
         raise NotFoundError(f"Restaurant {restaurant_id} not found")
+    return restaurant
+
+
+async def list_restaurants(
+    session: AsyncSession, *, limit: int, offset: int
+) -> tuple[list[Restaurant], int]:
+    total = await session.scalar(select(func.count()).select_from(Restaurant)) or 0
+    result = await session.scalars(
+        select(Restaurant).order_by(Restaurant.name, Restaurant.id).limit(limit).offset(offset)
+    )
+    return list(result), total
+
+
+async def update_restaurant(
+    session: AsyncSession, restaurant_id: int, data: RestaurantUpdate
+) -> Restaurant:
+    """Existing reservations are left untouched when hours or duration change."""
+    restaurant = await get_restaurant(session, restaurant_id)
+    changes = data.model_dump(exclude_unset=True)
+
+    opens_at = changes.get("opens_at", restaurant.opens_at)
+    closes_at = changes.get("closes_at", restaurant.closes_at)
+    if opens_at >= closes_at:
+        raise InvalidRestaurantUpdateError("opens_at must be earlier than closes_at")
+
+    for field, value in changes.items():
+        setattr(restaurant, field, value)
+    await session.commit()
     return restaurant
 
 

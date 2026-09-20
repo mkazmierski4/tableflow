@@ -2,12 +2,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from src.api.deps import SessionDep
+from src.api.deps import AdminUser, SessionDep
 from src.schemas import (
     AvailabilityQuery,
     AvailabilityRead,
+    Page,
+    Pagination,
     RestaurantCreate,
     RestaurantRead,
+    RestaurantUpdate,
     TableCreate,
     TableRead,
 )
@@ -16,8 +19,23 @@ from src.services import availability_service, restaurant_service
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
 
+@router.get("", response_model=Page[RestaurantRead])
+async def list_restaurants(session: SessionDep, page: Pagination) -> Page[RestaurantRead]:
+    items, total = await restaurant_service.list_restaurants(
+        session, limit=page.limit, offset=page.offset
+    )
+    return Page(
+        items=[RestaurantRead.model_validate(r) for r in items],
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
 @router.post("", response_model=RestaurantRead, status_code=status.HTTP_201_CREATED)
-async def create_restaurant(data: RestaurantCreate, session: SessionDep) -> RestaurantRead:
+async def create_restaurant(
+    data: RestaurantCreate, session: SessionDep, _admin: AdminUser
+) -> RestaurantRead:
     restaurant = await restaurant_service.create_restaurant(session, data)
     return RestaurantRead.model_validate(restaurant)
 
@@ -28,10 +46,20 @@ async def get_restaurant(restaurant_id: int, session: SessionDep) -> RestaurantR
     return RestaurantRead.model_validate(restaurant)
 
 
+@router.patch("/{restaurant_id}", response_model=RestaurantRead)
+async def update_restaurant(
+    restaurant_id: int, data: RestaurantUpdate, session: SessionDep, _admin: AdminUser
+) -> RestaurantRead:
+    restaurant = await restaurant_service.update_restaurant(session, restaurant_id, data)
+    return RestaurantRead.model_validate(restaurant)
+
+
 @router.post(
     "/{restaurant_id}/tables", response_model=TableRead, status_code=status.HTTP_201_CREATED
 )
-async def create_table(restaurant_id: int, data: TableCreate, session: SessionDep) -> TableRead:
+async def create_table(
+    restaurant_id: int, data: TableCreate, session: SessionDep, _admin: AdminUser
+) -> TableRead:
     table = await restaurant_service.create_table(session, restaurant_id, data)
     return TableRead.model_validate(table)
 

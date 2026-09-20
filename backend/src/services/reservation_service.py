@@ -1,7 +1,6 @@
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
 
-from sqlalchemy import CursorResult, select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -17,31 +16,11 @@ from src.core.exceptions import (
 from src.models import ACTIVE_STATUSES, DiningTable, Reservation, ReservationStatus
 from src.models.base import utcnow
 from src.schemas import ReservationCreate
+from src.services.locking import lock_table
 from src.services.scheduling import resolve_end, within_opening_hours
 
 EXCLUSION_CONSTRAINT = "no_overlapping_reservations"
 CANCELLABLE_STATUSES = (ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
-
-
-async def _lock_table(session: AsyncSession, table_id: int) -> None:
-    """Serialise concurrent bookings of one table for the rest of the transaction.
-
-    Must be the first statement of the transaction. PostgreSQL takes a row lock
-    (`SELECT ... FOR UPDATE`); SQLite has no row locks, so a no-op UPDATE acquires
-    the database write lock instead. Other writers wait until we commit/rollback.
-    """
-    if session.get_bind().dialect.name == "sqlite":
-        result = await session.execute(
-            text("UPDATE tables SET id = id WHERE id = :id"), {"id": table_id}
-        )
-        found = cast("CursorResult[Any]", result).rowcount > 0
-    else:
-        locked = await session.execute(
-            select(DiningTable.id).where(DiningTable.id == table_id).with_for_update()
-        )
-        found = locked.first() is not None
-    if not found:
-        raise NotFoundError(f"Table {table_id} not found")
 
 
 async def create_reservation(
@@ -58,7 +37,7 @@ async def create_reservation(
     """
     now = now or utcnow()
     try:
-        await _lock_table(session, data.table_id)
+        await lock_table(session, data.table_id)
 
         table = await session.get(
             DiningTable, data.table_id, options=[joinedload(DiningTable.restaurant)]

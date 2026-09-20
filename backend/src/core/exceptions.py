@@ -62,3 +62,7 @@ class TableHasReservationsError(DomainError):
 
 class InvalidUserUpdateError(DomainError):
     code = "invalid_user_update"
+
+
+class InvalidRestaurantUpdateError(DomainError):
+    code = "invalid_restaurant_update"
