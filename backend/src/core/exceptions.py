@@ -32,3 +32,7 @@ class ReservationInPastError(DomainError):
 
 class InvalidReservationStateError(DomainError):
     code = "invalid_reservation_state"
+
+
+class DuplicateTableError(DomainError):
+    code = "duplicate_table_label"

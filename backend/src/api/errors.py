@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from src.core.exceptions import (
     CapacityExceededError,
     DomainError,
+    DuplicateTableError,
     InvalidReservationStateError,
     NotFoundError,
     OutsideOpeningHoursError,
@@ -15,6 +16,7 @@ STATUS_BY_ERROR: dict[type[DomainError], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     SlotConflictError: status.HTTP_409_CONFLICT,
     InvalidReservationStateError: status.HTTP_409_CONFLICT,
+    DuplicateTableError: status.HTTP_409_CONFLICT,
     CapacityExceededError: status.HTTP_422_UNPROCESSABLE_ENTITY,
     OutsideOpeningHoursError: status.HTTP_422_UNPROCESSABLE_ENTITY,
     ReservationInPastError: status.HTTP_422_UNPROCESSABLE_ENTITY,
