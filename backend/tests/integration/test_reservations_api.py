@@ -1,9 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 
 from tests.conftest import booking
+
+pytestmark = pytest.mark.usefixtures("as_guest")
 
 URL = "/api/v1/reservations"
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Self
 
+from fastapi import Depends, Query
 from pydantic import (
     AwareDatetime,
     BaseModel,
@@ -33,14 +34,17 @@ class TimeRange(BaseModel):
 class ReservationCreate(TimeRange):
     table_id: int
     party_size: StrictPartySize
-    guest_name: Annotated[str, Field(min_length=1, max_length=120)]
-    guest_email: EmailStr
+    # Default to the booking user's profile when omitted.
+    guest_name: Annotated[str | None, Field(min_length=1, max_length=120)] = None
+    guest_email: EmailStr | None = None
     guest_phone: Annotated[str | None, Field(max_length=32)] = None
     notes: Annotated[str | None, Field(max_length=500)] = None
 
     @field_validator("guest_name")
     @classmethod
-    def _strip_guest_name(cls, value: str) -> str:
+    def _strip_guest_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         value = value.strip()
         if not value:
             raise ValueError("guest_name must not be blank")
@@ -52,6 +56,7 @@ class ReservationRead(BaseModel):
 
     id: int
     table_id: int
+    user_id: int | None
     start_at: datetime
     end_at: datetime
     party_size: int
@@ -61,3 +66,24 @@ class ReservationRead(BaseModel):
     guest_phone: str | None
     notes: str | None
     created_at: datetime
+
+
+class ReservationFilters:
+    """Query parameters for listing reservations; `from`/`to` bound `start_at` ([from, to))."""
+
+    def __init__(
+        self,
+        restaurant_id: int | None = None,
+        table_id: int | None = None,
+        status: ReservationStatus | None = None,
+        from_: Annotated[AwareDatetime | None, Query(alias="from")] = None,
+        to: AwareDatetime | None = None,
+    ) -> None:
+        self.restaurant_id = restaurant_id
+        self.table_id = table_id
+        self.status = status
+        self.from_ = from_
+        self.to = to
+
+
+ReservationFilterParams = Annotated[ReservationFilters, Depends()]

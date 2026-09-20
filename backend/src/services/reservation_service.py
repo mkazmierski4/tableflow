@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -13,9 +13,10 @@ from src.core.exceptions import (
     ReservationInPastError,
     SlotConflictError,
 )
-from src.models import ACTIVE_STATUSES, DiningTable, Reservation, ReservationStatus
+from src.models import ACTIVE_STATUSES, DiningTable, Reservation, ReservationStatus, User
 from src.models.base import utcnow
-from src.schemas import ReservationCreate
+from src.schemas import ReservationCreate, ReservationFilters
+from src.services.access import can_access_reservation, reservation_scope
 from src.services.locking import lock_table
 from src.services.scheduling import resolve_end, within_opening_hours
 
@@ -25,6 +26,7 @@ CANCELLABLE_STATUSES = (ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
 
 async def create_reservation(
     session: AsyncSession,
+    user: User,
     data: ReservationCreate,
     *,
     min_lead_time_minutes: int = 0,
@@ -88,11 +90,12 @@ async def create_reservation(
 
         reservation = Reservation(
             table_id=table.id,
+            user_id=user.id,
             start_at=start_at,
             end_at=end_at,
             party_size=data.party_size,
-            guest_name=data.guest_name,
-            guest_email=str(data.guest_email),
+            guest_name=data.guest_name or user.full_name,
+            guest_email=str(data.guest_email) if data.guest_email else user.email,
             guest_phone=data.guest_phone,
             notes=data.notes,
             status=ReservationStatus.CONFIRMED,
@@ -111,15 +114,58 @@ async def create_reservation(
         raise
 
 
-async def get_reservation(session: AsyncSession, reservation_id: int) -> Reservation:
-    reservation = await session.get(Reservation, reservation_id)
-    if reservation is None:
+async def get_reservation(session: AsyncSession, user: User, reservation_id: int) -> Reservation:
+    """Load a reservation the user may see; anything else is reported as not found."""
+    reservation = await session.scalar(
+        select(Reservation)
+        .options(joinedload(Reservation.table))
+        .where(Reservation.id == reservation_id)
+    )
+    if reservation is None or not can_access_reservation(user, reservation):
         raise NotFoundError(f"Reservation {reservation_id} not found")
     return reservation
 
 
-async def cancel_reservation(session: AsyncSession, reservation_id: int) -> Reservation:
-    reservation = await get_reservation(session, reservation_id)
+async def list_reservations(
+    session: AsyncSession,
+    user: User,
+    filters: ReservationFilters,
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[Reservation], int]:
+    conditions: list[ColumnElement[bool]] = []
+    if (scope := reservation_scope(user)) is not None:
+        conditions.append(scope)
+    if filters.restaurant_id is not None:
+        conditions.append(DiningTable.restaurant_id == filters.restaurant_id)
+    if filters.table_id is not None:
+        conditions.append(Reservation.table_id == filters.table_id)
+    if filters.status is not None:
+        conditions.append(Reservation.status == filters.status)
+    if filters.from_ is not None:
+        conditions.append(Reservation.start_at >= filters.from_)
+    if filters.to is not None:
+        conditions.append(Reservation.start_at < filters.to)
+
+    base = select(Reservation).join(DiningTable, Reservation.table_id == DiningTable.id)
+    total = (
+        await session.scalar(
+            select(func.count()).select_from(base.where(*conditions).order_by(None).subquery())
+        )
+        or 0
+    )
+    result = await session.scalars(
+        base.where(*conditions)
+        .order_by(Reservation.start_at, Reservation.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(result), total
+
+
+async def cancel_reservation(session: AsyncSession, user: User, reservation_id: int) -> Reservation:
+    reservation = await get_reservation(session, user, reservation_id)
     if reservation.status not in CANCELLABLE_STATUSES:
         raise InvalidReservationStateError(
             f"Reservation in status '{reservation.status.value}' cannot be cancelled"

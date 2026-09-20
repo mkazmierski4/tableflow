@@ -1,6 +1,11 @@
 from src.schemas.availability import AvailabilityQuery, AvailabilityRead
 from src.schemas.common import Page, Pagination
-from src.schemas.reservation import ReservationCreate, ReservationRead
+from src.schemas.reservation import (
+    ReservationCreate,
+    ReservationFilterParams,
+    ReservationFilters,
+    ReservationRead,
+)
 from src.schemas.restaurant import RestaurantCreate, RestaurantRead, RestaurantUpdate
 from src.schemas.table import TableCreate, TableRead, TableUpdate
 from src.schemas.user import TokenRead, UserRead, UserRegister, UserUpdate
@@ -11,6 +16,8 @@ __all__ = [
     "Page",
     "Pagination",
     "ReservationCreate",
+    "ReservationFilterParams",
+    "ReservationFilters",
     "ReservationRead",
     "RestaurantCreate",
     "RestaurantRead",

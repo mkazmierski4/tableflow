@@ -194,6 +194,13 @@ async def guest(make_user: MakeUser) -> TestUser:
 
 
 @pytest.fixture
+def as_guest(client: AsyncClient, guest: TestUser) -> TestUser:
+    """Make the shared client authenticate as `guest` unless a request passes its own headers."""
+    client.headers.update(guest.headers)
+    return guest
+
+
+@pytest.fixture
 async def venue(client: AsyncClient, admin: TestUser) -> dict[str, Any]:
     """A restaurant (Warsaw, 12:00-23:00, 90 min slots) with a 4-seat and a 2-seat table."""
     restaurant = await create_restaurant(client, headers=admin.headers)

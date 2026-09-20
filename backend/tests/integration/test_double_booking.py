@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from src.models import Reservation, ReservationStatus
 from tests.conftest import booking
 
+pytestmark = pytest.mark.usefixtures("as_guest")
+
 URL = "/api/v1/reservations"
 CONCURRENCY = 20
 
