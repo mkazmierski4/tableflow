@@ -1,0 +1,39 @@
+# Szkielet środowiska: backend (FastAPI) + PostgreSQL.
+# Uwaga: backend/Dockerfile zostanie dodany w Fazie 1 (Setup FastAPI).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tableflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tableflow
+      POSTGRES_PASSWORD: tableflow
+      POSTGRES_DB: tableflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tableflow -d tableflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: tableflow-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tableflow:tableflow@db:5432/tableflow
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+volumes:
+  pgdata:
