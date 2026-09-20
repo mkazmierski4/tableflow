@@ -16,12 +16,18 @@ Projekt portfolio publikowany na GitHub – jakość kodu, historia commitów i 
 
 - Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.0 (async), Alembic, Pytest.
 - **Warstwy**: `api` (routery, zależności HTTP) → `services` (logika biznesowa) → `models` (ORM). Routery są cienkie – żadnej logiki biznesowej.
-- **Pydantic v2**: modele dziedziczą po `BaseModel`, `model_config = ConfigDict(strict=True, from_attributes=True)` tam, gdzie ma to sens;
+- **Pydantic v2**: modele dziedziczą po `BaseModel`, `ConfigDict(from_attributes=True)` w schematach `Read`;
   walidacja przez `@field_validator` / `@model_validator`; osobne schematy `Create` / `Update` / `Read`.
+  Strict types stosujemy na poziomie pól (`Field(strict=True)`) dla ciał JSON. `strict=True` na całym modelu psuje daty i enumy
+  w FastAPI (body trafia do walidacji jako obiekt Pythona) oraz parametry query (zawsze stringi).
 - **SQLAlchemy 2.0**: styl `Mapped[...]` + `mapped_column`, `AsyncSession`, `select()`; bez lazy loadingu w async (używamy `selectinload`/`joinedload`).
 - **Czas**: wszystkie daty jako timezone-aware UTC (`datetime` z `tzinfo`).
 - **Type hints** obowiązkowe (mypy strict dla `src/`), formatowanie i lint: `ruff`.
 - **Anti-double-booking** jest niepodlegające negocjacjom: walidacja w serwisie + blokada w transakcji + constraint w bazie (patrz README).
+  Blokada (`_lock_table`) musi być pierwszym poleceniem transakcji; serwis sam robi `commit`/`rollback`.
+  Zmiany w tej logice wymagają testów współbieżności (`tests/integration/test_double_booking.py`).
+- Testy działają domyślnie na plikowym SQLite; z `TEST_POSTGRES_URL` te same testy biegną także na PostgreSQL
+  (wymagany osobny schemat testowy – fixture robi `drop_all`).
 - Błędy domenowe jako własne wyjątki (`core/exceptions.py`) mapowane na HTTP w jednym miejscu.
 - Konfiguracja wyłącznie przez `pydantic-settings` (`core/config.py`) i zmienne środowiskowe.
 
@@ -45,7 +51,8 @@ python -m venv .venv
 pip install -r requirements.txt
 cp .env.example .env
 uvicorn src.main:app --reload     # http://localhost:8000  (docs: /docs)
-pytest                            # testy
+pytest                            # testy (SQLite)
+TEST_POSTGRES_URL=postgresql+asyncpg://tableflow:tableflow@localhost:5432/tableflow_test pytest   # + PostgreSQL
 ruff check . && ruff format .     # lint + format
 mypy src                          # typy
 alembic upgrade head              # migracje
@@ -63,7 +70,7 @@ npm run lint
 
 ### Docker
 ```bash
-docker compose up --build         # backend + PostgreSQL
+docker compose up --build         # backend (migracje + uvicorn) + PostgreSQL
 docker compose down -v            # zatrzymaj i usuń wolumeny
 ```
 
@@ -78,43 +85,47 @@ tableflow/
 ├── backend/
 │   ├── .env.example
 │   ├── requirements.txt
-│   ├── alembic.ini                  # (Faza 1)
-│   ├── alembic/                     # (Faza 1) migracje
+│   ├── pyproject.toml               # ruff, mypy, pytest
+│   ├── Dockerfile
+│   ├── alembic.ini
+│   ├── alembic/                     # migracje (0001: schemat + exclusion constraint na PG)
 │   ├── src/
-│   │   ├── main.py                  # (Faza 1) app factory, lifespan, CORS
+│   │   ├── main.py                  # app factory, lifespan, CORS
 │   │   ├── api/
-│   │   │   ├── deps.py              # zależności (sesja DB, auth)
+│   │   │   ├── deps.py              # zależności (sesja DB, settings; auth w Fazie 2)
+│   │   │   ├── errors.py            # wyjątki domenowe → HTTP
 │   │   │   └── v1/
 │   │   │       ├── router.py
-│   │   │       ├── auth.py
-│   │   │       ├── restaurants.py
-│   │   │       ├── tables.py
-│   │   │       ├── availability.py
-│   │   │       └── reservations.py
+│   │   │       ├── health.py
+│   │   │       ├── restaurants.py   # restauracje, stoliki, availability
+│   │   │       ├── reservations.py
+│   │   │       └── auth.py          # (Faza 2)
 │   │   ├── core/
 │   │   │   ├── config.py            # pydantic-settings
-│   │   │   ├── database.py          # async engine + session
-│   │   │   ├── security.py          # hash haseł, JWT
-│   │   │   └── exceptions.py        # wyjątki domenowe
+│   │   │   ├── database.py          # async engine + session (pragmy SQLite)
+│   │   │   ├── exceptions.py        # wyjątki domenowe
+│   │   │   └── security.py          # (Faza 2) hash haseł, JWT
 │   │   ├── models/                  # SQLAlchemy ORM
-│   │   │   ├── base.py
-│   │   │   ├── user.py
+│   │   │   ├── base.py              # Base, UTCDateTime, TimestampMixin
 │   │   │   ├── restaurant.py
-│   │   │   ├── table.py
-│   │   │   └── reservation.py
+│   │   │   ├── table.py             # DiningTable
+│   │   │   ├── reservation.py       # + exclusion constraint (PG)
+│   │   │   └── user.py              # (Faza 2)
 │   │   ├── schemas/                 # Pydantic v2
-│   │   │   ├── user.py
 │   │   │   ├── restaurant.py
 │   │   │   ├── table.py
-│   │   │   └── reservation.py
+│   │   │   ├── reservation.py
+│   │   │   ├── availability.py
+│   │   │   └── user.py              # (Faza 2)
 │   │   └── services/                # logika biznesowa
+│   │       ├── scheduling.py        # czyste reguły: overlap, godziny otwarcia
 │   │       ├── reservation_service.py
 │   │       ├── availability_service.py
-│   │       └── table_service.py
+│   │       └── restaurant_service.py
 │   └── tests/
-│       ├── conftest.py
+│       ├── conftest.py              # fixtures: SQLite (+ PostgreSQL z TEST_POSTGRES_URL)
 │       ├── unit/
-│       └── integration/             # w tym testy współbieżności (double-booking)
+│       └── integration/             # w tym testy współbieżności (test_double_booking.py)
 └── frontend/
     ├── app/                         # Expo Router
     │   ├── _layout.tsx
@@ -142,12 +153,12 @@ tableflow/
     └── package.json
 ```
 
-> Pozycje oznaczone jako „Faza N” lub jeszcze nieistniejące to struktura docelowa – katalogi/pliki powstają iteracyjnie.
+> Pozycje oznaczone jako „Faza N” oraz cały `frontend/` to struktura docelowa – pliki powstają iteracyjnie.
 
 ## Roadmapa faz
 
 0. **Inicjalizacja architektury** (dokumentacja, struktura, git) ✅
-1. Setup FastAPI + baza + walidacja rezerwacji i anti-overbooking
+1. Setup FastAPI + baza + walidacja rezerwacji i anti-overbooking ✅
 2. Auth (JWT) + zarządzanie restauracjami i stolikami
 3. Inicjalizacja Expo + NativeWind + nawigacja + motyw
 4. Plan sali, rezerwacje, animacje (Reanimated/Moti)

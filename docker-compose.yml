@@ -1,5 +1,4 @@
 # Szkielet środowiska: backend (FastAPI) + PostgreSQL.
-# Uwaga: backend/Dockerfile zostanie dodany w Fazie 1 (Setup FastAPI).
 services:
   db:
     image: postgres:16-alpine
@@ -33,7 +32,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
 
 volumes:
   pgdata:
