@@ -8,6 +8,9 @@ aiosqlite==0.22.1
 asyncpg==0.31.0
 alembic==1.20.0
 tzdata>=2024.1          # IANA timezones on Windows
+PyJWT==2.14.0
+pwdlib[argon2]==0.3.1
+python-multipart==0.0.32  # OAuth2 password form (login)
 
 # --- Dev / test ---
 pytest==9.1.1
