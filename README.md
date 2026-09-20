@@ -4,7 +4,7 @@
 
 An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via Expo) that lets guests book a table in seconds and gives restaurant staff a live view of the floor — with **guaranteed protection against double-booking**.
 
-> **Status:** Phase 1 – the backend core is implemented: reservations with anti-double-booking, availability search, and minimal restaurant/table management. Authentication and the frontend are planned (see [Roadmap](#roadmap)).
+> **Status:** Phase 2 – the backend is feature-complete: JWT authentication with guest/staff/admin roles, restaurant and table management, reservations with anti-double-booking, rescheduling and a staff status lifecycle. The Expo frontend is next (see [Roadmap](#roadmap)).
 
 ---
 
@@ -21,10 +21,11 @@ An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via
 ## Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, Pydantic v2, async SQLAlchemy 2.0, Alembic, Pytest
+- **Auth:** JWT (PyJWT) with argon2id password hashing (pwdlib), role-based access control
 - **Database:** SQLite (development), PostgreSQL 16 (Docker / production)
 - **Frontend:** React Native + Expo (Expo Router), TypeScript, NativeWind
 - **UI/UX:** React Native Reanimated, Moti, Gesture Handler; dark-slate design with light/dark mode
-- **Tooling:** Docker Compose, Ruff, mypy, Conventional Commits
+- **Tooling:** Docker Compose, GitHub Actions CI (Ruff, mypy, Pytest on SQLite and PostgreSQL), Conventional Commits
 
 ## Architecture
 
@@ -59,7 +60,7 @@ Layering rules: routers are thin and only handle HTTP concerns; all business rul
 Double-booking is a race condition: two requests check availability at the same time, both see the table as free, and both insert. TableFlow defends against it in three layers:
 
 1. **Validation (service layer).** A reservation occupies the half-open interval `[start_at, end_at)`. Two reservations for the same table conflict when `new.start < existing.end AND new.end > existing.start`, considering only active statuses (`pending`, `confirmed`, `seated`). Back-to-back bookings (one ends exactly when the next starts) are allowed. Party size must not exceed table capacity and the slot must fall within opening hours.
-2. **Serialisation (transaction).** The check and the insert run in a single transaction that first statement locks the target table: `SELECT … FOR UPDATE` on PostgreSQL (a row lock, so other tables are unaffected), and a no-op `UPDATE` on SQLite (which has no row locks, so this takes the database write lock). Concurrent attempts for the same table are queued instead of interleaved.
+2. **Serialisation (transaction).** The check and the insert run in a single transaction whose first statement locks the target table: `SELECT … FOR UPDATE` on PostgreSQL (a row lock, so other tables are unaffected), and a no-op `UPDATE` on SQLite (which has no row locks, so this takes the database write lock). Concurrent attempts for the same table are queued instead of interleaved.
 3. **Database constraint (last line of defence).** On PostgreSQL an exclusion constraint guarantees that overlapping active reservations can never be stored, regardless of application bugs:
 
    ```sql
@@ -76,39 +77,75 @@ Double-booking is a race condition: two requests check availability at the same 
 
 The behaviour is covered by integration tests that fire many concurrent booking requests (identical and staggered-overlapping slots) and assert that exactly one succeeds and that stored reservations never overlap. With `TEST_POSTGRES_URL` set, the same suite also runs against PostgreSQL, including a test that inserts overlapping rows directly and expects the database to reject them.
 
+## Authentication & Roles
+
+Authentication uses short-lived JWT access tokens (HS256, 60 minutes by default, no refresh tokens yet). Passwords are hashed with argon2id. In Swagger UI (`/docs`) use **Authorize** and log in with your e-mail as the username.
+
+| Role | Can do |
+|---|---|
+| **guest** (default on registration) | Book tables, and view, reschedule and cancel **their own** reservations |
+| **staff** (assigned to one restaurant) | Everything a guest can, plus list and manage **all reservations of their restaurant**: change status, move them between tables |
+| **admin** | Everything, across all restaurants; manages restaurants, tables and users |
+
+Self-registration always creates a guest. Admins grant roles with `PATCH /users/{id}`; the first admin is created from the command line:
+
+```bash
+cd backend
+python -m src.cli create-admin --email you@example.com --name "Your Name"   # prompts for a password
+```
+
+A reservation the caller may not access is reported as `404` rather than `403`, so its existence is not leaked. Deactivating a user (`is_active=false`) revokes their tokens immediately.
+
 ## API Endpoints
 
-Base path: `/api/v1`. Domain errors share one shape: `{"error": {"code": "slot_conflict", "message": "..."}}`.
-Authentication and role checks arrive in Phase 2, so the write endpoints are open until then.
+Base path: `/api/v1`. Domain errors share one shape: `{"error": {"code": "slot_conflict", "message": "..."}}`. List endpoints return `{"items": [...], "total": n, "limit": n, "offset": n}` and accept `limit` (1–100) and `offset`.
 
-| Method | Endpoint | Description | Status |
+| Method | Endpoint | Description | Access |
 |---|---|---|---|
-| `GET` | `/health` | Liveness check | ✅ |
-| `POST` | `/restaurants` | Create a restaurant (`opens_at` / `closes_at`, IANA `timezone`) | ✅ |
-| `GET` | `/restaurants/{id}` | Restaurant details | ✅ |
-| `POST` | `/restaurants/{id}/tables` | Add a table (`label`, `capacity`) | ✅ |
-| `GET` | `/restaurants/{id}/tables` | List tables | ✅ |
-| `GET` | `/restaurants/{id}/availability?start_at&end_at&party_size` | Free tables for a slot, smallest fitting first | ✅ |
-| `POST` | `/reservations` | Create a reservation (anti-double-booking) | ✅ |
-| `GET` | `/reservations/{id}` | Reservation details | ✅ |
-| `POST` | `/reservations/{id}/cancel` | Cancel a reservation and free the slot | ✅ |
-| `POST` / `GET` | `/auth/register`, `/auth/login`, `/auth/me` | Registration, JWT login, profile | Phase 2 |
-| `GET` / `PATCH` | `/restaurants`, `/restaurants/{id}` | List / update restaurants (admin) | Phase 2 |
-| `PATCH` / `DELETE` | `/tables/{id}` | Update / remove a table (admin) | Phase 2 |
-| `GET` / `PATCH` | `/reservations`, `/reservations/{id}` | List with filters / reschedule | Phase 2 |
-| `PATCH` | `/reservations/{id}/status` | Staff status changes (seated, completed, no_show) | Phase 2 |
+| `GET` | `/health` | Liveness check | public |
+| `POST` | `/auth/register` | Register a guest account | public |
+| `POST` | `/auth/login` | OAuth2 password login, returns a bearer token | public |
+| `GET` | `/auth/me` | Current user | any user |
+| `PATCH` | `/users/{id}` | Change role, staff restaurant or `is_active` | admin |
+| `GET` | `/restaurants` | List restaurants (paginated) | public |
+| `POST` | `/restaurants` | Create a restaurant (`opens_at` / `closes_at`, IANA `timezone`) | admin |
+| `GET` | `/restaurants/{id}` | Restaurant details | public |
+| `PATCH` | `/restaurants/{id}` | Partially update a restaurant | admin |
+| `GET` | `/restaurants/{id}/tables` | List tables | public |
+| `POST` | `/restaurants/{id}/tables` | Add a table (`label`, `capacity`) | admin |
+| `PATCH` | `/tables/{id}` | Change label, capacity or `is_active` | admin |
+| `DELETE` | `/tables/{id}` | Soft delete (deactivate) a table | admin |
+| `GET` | `/restaurants/{id}/availability?start_at&end_at&party_size` | Free tables for a slot, smallest fitting first | public |
+| `POST` | `/reservations` | Create a reservation (anti-double-booking) | any user |
+| `GET` | `/reservations` | List, filtered by `restaurant_id`, `table_id`, `status`, `from`, `to` | scoped by role |
+| `GET` | `/reservations/{id}` | Reservation details | owner / staff of the venue / admin |
+| `PATCH` | `/reservations/{id}` | Reschedule, change party size or notes (`table_id`: staff only) | owner / staff / admin |
+| `POST` | `/reservations/{id}/cancel` | Cancel a reservation and free the slot | owner / staff / admin |
+| `PATCH` | `/reservations/{id}/status` | Lifecycle change (confirm, seat, complete, no-show, cancel) | staff / admin |
 
-Error codes: `slot_conflict`, `invalid_reservation_state`, `duplicate_table_label` (409); `capacity_exceeded`, `outside_opening_hours`, `reservation_too_soon` (422); `not_found` (404). Malformed requests return FastAPI's standard `422`.
+Error codes: `slot_conflict`, `invalid_reservation_state`, `duplicate_table_label`, `table_has_reservations`, `email_taken` (409); `capacity_exceeded`, `outside_opening_hours`, `reservation_too_soon`, `invalid_time_range`, `invalid_user_update`, `invalid_restaurant_update` (422); `not_found` (404); `not_authenticated`, `invalid_token`, `invalid_credentials` (401); `forbidden` (403). Malformed requests return FastAPI's standard `422`.
 
 Interactive docs are served at `/docs` (Swagger UI) and `/redoc`.
 
 ### Reservation rules
 
 - Datetimes must be timezone-aware; they are stored and returned in UTC.
-- `end_at` is optional and defaults to the restaurant's `default_duration_minutes`.
-- A reservation must fit within one local day's opening hours, evaluated in the restaurant's timezone.
-- A reservation must start at least `RESERVATION_MIN_LEAD_TIME_MINUTES` from now.
-- New reservations are `confirmed` immediately; the other lifecycle statuses belong to the staff flow in Phase 2.
+- `end_at` is optional and defaults to the restaurant's `default_duration_minutes`. When rescheduling, moving only `start_at` keeps the duration.
+- A reservation must fit within one local day's opening hours, evaluated in the restaurant's timezone. Changing the opening hours does not affect existing reservations.
+- Guests must book (and reschedule) at least `RESERVATION_MIN_LEAD_TIME_MINUTES` ahead.
+- New reservations are `confirmed` immediately. `guest_name` and `guest_email` default to the booking user's profile.
+- Only upcoming (`pending` / `confirmed`) reservations can be rescheduled.
+- A table with upcoming active reservations cannot be deactivated, and its capacity cannot be reduced below an upcoming party. These changes take the same per-table lock as bookings.
+
+### Reservation lifecycle
+
+```
+pending ──► confirmed ──► seated ──► completed
+   │            │  └────► no_show   (only after the start time)
+   └────────────┴───────► cancelled
+```
+
+`completed`, `cancelled` and `no_show` are final. Staff drive the lifecycle through `PATCH /reservations/{id}/status`; guests can only cancel.
 
 ## Project Structure
 
@@ -132,8 +169,9 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate          # Windows (Linux/macOS: source .venv/bin/activate)
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env            # set SECRET_KEY (required when APP_ENV=production)
 alembic upgrade head            # create the schema (SQLite file by default)
+python -m src.cli create-admin --email you@example.com --name "You"   # first admin
 uvicorn src.main:app --reload   # http://localhost:8000/docs
 pytest                          # SQLite; set TEST_POSTGRES_URL to also run against PostgreSQL
 ```
@@ -158,10 +196,10 @@ docker compose up --build       # applies migrations, then serves http://localho
 
 - [x] **Phase 0** – Project structure and documentation
 - [x] **Phase 1** – FastAPI + database setup, reservation validation and anti-double-booking
-- [ ] **Phase 2** – Authentication (JWT), restaurants and tables management
+- [x] **Phase 2** – Authentication (JWT), restaurants and tables management
 - [ ] **Phase 3** – Expo + NativeWind app shell, navigation, theming
 - [ ] **Phase 4** – Floor plan, booking flow, Reanimated/Moti animations
-- [ ] **Phase 5** – Keyboard shortcuts, polish, CI, deployment
+- [ ] **Phase 5** – Keyboard shortcuts, polish, frontend CI, deployment
 
 ## Conventions
 

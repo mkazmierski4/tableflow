@@ -24,8 +24,13 @@ Projekt portfolio publikowany na GitHub – jakość kodu, historia commitów i 
 - **Czas**: wszystkie daty jako timezone-aware UTC (`datetime` z `tzinfo`).
 - **Type hints** obowiązkowe (mypy strict dla `src/`), formatowanie i lint: `ruff`.
 - **Anti-double-booking** jest niepodlegające negocjacjom: walidacja w serwisie + blokada w transakcji + constraint w bazie (patrz README).
-  Blokada (`_lock_table`) musi być pierwszym poleceniem transakcji; serwis sam robi `commit`/`rollback`.
-  Zmiany w tej logice wymagają testów współbieżności (`tests/integration/test_double_booking.py`).
+  Blokada (`services/locking.py::lock_table`) musi być pierwszym poleceniem transakcji; serwis sam robi `commit`/`rollback`.
+  Każda operacja, która rezerwuje, przesuwa lub odbiera pojemność stolika, bierze tę blokadę (wiele stolików: rosnąco po id – bez deadlocków).
+  Zmiany w tej logice wymagają testów współbieżności (`test_double_booking.py`, `test_reservation_changes.py`, `test_tables_api.py`).
+- **Auth**: `CurrentUser` / `AdminUser` / `StaffUser` (`api/deps.py`). Użytkownik z tokenu jest ładowany w osobnej sesji, żeby sesja żądania
+  zaczynała transakcję od blokady. Cudzy zasób zwracamy jako 404 (nie 403). Uprawnienia do rezerwacji: `services/access.py`.
+- Maszyna stanów rezerwacji: `services/reservation_status.py` (czysta logika; żadne przejście nie wraca ze statusu końcowego do aktywnego).
+- Testy uprawnień i współbieżności weryfikujemy testem mutacyjnym (wyłączamy blokadę/kontrolę i sprawdzamy, że testy padają).
 - Testy działają domyślnie na plikowym SQLite; z `TEST_POSTGRES_URL` te same testy biegną także na PostgreSQL
   (wymagany osobny schemat testowy – fixture robi `drop_all`).
 - Błędy domenowe jako własne wyjątki (`core/exceptions.py`) mapowane na HTTP w jednym miejscu.
@@ -56,7 +61,12 @@ TEST_POSTGRES_URL=postgresql+asyncpg://tableflow:tableflow@localhost:5432/tablef
 ruff check . && ruff format .     # lint + format
 mypy src                          # typy
 alembic upgrade head              # migracje
+alembic check                     # czy modele są zgodne z migracjami
+python -m src.cli create-admin --email you@example.com --name "You"   # pierwszy admin (hasło: prompt lub TABLEFLOW_ADMIN_PASSWORD)
 ```
+
+### CI
+`.github/workflows/backend.yml`: ruff, mypy, migracje + `alembic check` na PostgreSQL oraz pytest na SQLite i PostgreSQL (Python 3.11 i 3.13), plus build obrazu Docker.
 
 ### Frontend
 ```bash
@@ -81,51 +91,65 @@ tableflow/
 ├── CLAUDE.md
 ├── README.md
 ├── .gitignore
+├── .gitattributes
 ├── docker-compose.yml
+├── .github/
+│   └── workflows/
+│       └── backend.yml              # CI: ruff, mypy, migracje, pytest (SQLite + PostgreSQL)
 ├── backend/
 │   ├── .env.example
 │   ├── requirements.txt
 │   ├── pyproject.toml               # ruff, mypy, pytest
 │   ├── Dockerfile
 │   ├── alembic.ini
-│   ├── alembic/                     # migracje (0001: schemat + exclusion constraint na PG)
+│   ├── alembic/                     # migracje
+│   │   └── versions/                # 0001 schemat + exclusion constraint (PG), 0002 users + user_id
 │   ├── src/
 │   │   ├── main.py                  # app factory, lifespan, CORS
+│   │   ├── cli.py                   # python -m src.cli create-admin
 │   │   ├── api/
-│   │   │   ├── deps.py              # zależności (sesja DB, settings; auth w Fazie 2)
+│   │   │   ├── deps.py              # SessionDep, CurrentUser, AdminUser, StaffUser
 │   │   │   ├── errors.py            # wyjątki domenowe → HTTP
 │   │   │   └── v1/
 │   │   │       ├── router.py
 │   │   │       ├── health.py
+│   │   │       ├── auth.py          # register, login, me
+│   │   │       ├── users.py         # role, przypisanie staffu, deaktywacja
 │   │   │       ├── restaurants.py   # restauracje, stoliki, availability
-│   │   │       ├── reservations.py
-│   │   │       └── auth.py          # (Faza 2)
+│   │   │       ├── tables.py        # PATCH / DELETE stolika
+│   │   │       └── reservations.py  # CRUD, lista, przekładanie, statusy
 │   │   ├── core/
 │   │   │   ├── config.py            # pydantic-settings
 │   │   │   ├── database.py          # async engine + session (pragmy SQLite)
 │   │   │   ├── exceptions.py        # wyjątki domenowe
-│   │   │   └── security.py          # (Faza 2) hash haseł, JWT
+│   │   │   └── security.py          # argon2, JWT
 │   │   ├── models/                  # SQLAlchemy ORM
 │   │   │   ├── base.py              # Base, UTCDateTime, TimestampMixin
+│   │   │   ├── user.py
 │   │   │   ├── restaurant.py
 │   │   │   ├── table.py             # DiningTable
-│   │   │   ├── reservation.py       # + exclusion constraint (PG)
-│   │   │   └── user.py              # (Faza 2)
+│   │   │   └── reservation.py       # + exclusion constraint (PG)
 │   │   ├── schemas/                 # Pydantic v2
+│   │   │   ├── common.py            # Page, paginacja
+│   │   │   ├── user.py
 │   │   │   ├── restaurant.py
 │   │   │   ├── table.py
 │   │   │   ├── reservation.py
-│   │   │   ├── availability.py
-│   │   │   └── user.py              # (Faza 2)
+│   │   │   └── availability.py
 │   │   └── services/                # logika biznesowa
+│   │       ├── locking.py           # blokada stolika (FOR UPDATE / write lock SQLite)
 │   │       ├── scheduling.py        # czyste reguły: overlap, godziny otwarcia
+│   │       ├── reservation_status.py # czysta maszyna stanów rezerwacji
+│   │       ├── access.py            # kto widzi/zarządza którą rezerwacją
 │   │       ├── reservation_service.py
 │   │       ├── availability_service.py
-│   │       └── restaurant_service.py
+│   │       ├── restaurant_service.py
+│   │       ├── table_service.py
+│   │       └── user_service.py
 │   └── tests/
-│       ├── conftest.py              # fixtures: SQLite (+ PostgreSQL z TEST_POSTGRES_URL)
-│       ├── unit/
-│       └── integration/             # w tym testy współbieżności (test_double_booking.py)
+│       ├── conftest.py              # fixtures: SQLite (+ PostgreSQL z TEST_POSTGRES_URL), użytkownicy
+│       ├── unit/                    # scheduling, schematy, security, maszyna stanów
+│       └── integration/             # API, uprawnienia, współbieżność (test_double_booking.py …)
 └── frontend/
     ├── app/                         # Expo Router
     │   ├── _layout.tsx
@@ -159,7 +183,7 @@ tableflow/
 
 0. **Inicjalizacja architektury** (dokumentacja, struktura, git) ✅
 1. Setup FastAPI + baza + walidacja rezerwacji i anti-overbooking ✅
-2. Auth (JWT) + zarządzanie restauracjami i stolikami
+2. Auth (JWT) + zarządzanie restauracjami, stolikami i statusami rezerwacji + CI ✅
 3. Inicjalizacja Expo + NativeWind + nawigacja + motyw
 4. Plan sali, rezerwacje, animacje (Reanimated/Moti)
 5. Polish, skróty klawiszowe, CI, deployment
