@@ -8,20 +8,93 @@ from sqlalchemy.orm import joinedload
 from src.core.exceptions import (
     CapacityExceededError,
     InvalidReservationStateError,
+    InvalidReservationTimeError,
     NotFoundError,
     OutsideOpeningHoursError,
+    PermissionDeniedError,
     ReservationInPastError,
     SlotConflictError,
 )
-from src.models import ACTIVE_STATUSES, DiningTable, Reservation, ReservationStatus, User
+from src.models import (
+    ACTIVE_STATUSES,
+    DiningTable,
+    Reservation,
+    ReservationStatus,
+    User,
+    UserRole,
+)
 from src.models.base import utcnow
-from src.schemas import ReservationCreate, ReservationFilters
-from src.services.access import can_access_reservation, reservation_scope
+from src.schemas import (
+    ReservationCreate,
+    ReservationFilters,
+    ReservationUpdate,
+)
+from src.services.access import can_access_reservation, can_manage_reservation, reservation_scope
 from src.services.locking import lock_table
+from src.services.reservation_status import EDITABLE_STATUSES, validate_transition
 from src.services.scheduling import resolve_end, within_opening_hours
 
 EXCLUSION_CONSTRAINT = "no_overlapping_reservations"
-CANCELLABLE_STATUSES = (ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
+
+
+# --- shared validation -------------------------------------------------------------------
+
+
+def _ensure_lead_time(start_at: datetime, *, now: datetime, minutes: int) -> None:
+    if start_at < now + timedelta(minutes=minutes):
+        raise ReservationInPastError(f"Reservations must start at least {minutes} minutes from now")
+
+
+def _ensure_capacity(table: DiningTable, party_size: int) -> None:
+    if party_size > table.capacity:
+        raise CapacityExceededError(
+            f"Table {table.label} seats {table.capacity}, party size is {party_size}"
+        )
+
+
+def _ensure_within_opening_hours(table: DiningTable, start_at: datetime, end_at: datetime) -> None:
+    restaurant = table.restaurant
+    if not within_opening_hours(
+        start_at,
+        end_at,
+        timezone=restaurant.timezone,
+        opens_at=restaurant.opens_at,
+        closes_at=restaurant.closes_at,
+    ):
+        raise OutsideOpeningHoursError(
+            f"Reservation must fit within opening hours "
+            f"{restaurant.opens_at:%H:%M}-{restaurant.closes_at:%H:%M} ({restaurant.timezone})"
+        )
+
+
+async def _ensure_slot_free(
+    session: AsyncSession,
+    table: DiningTable,
+    start_at: datetime,
+    end_at: datetime,
+    *,
+    ignore_id: int | None = None,
+) -> None:
+    conditions = [
+        Reservation.table_id == table.id,
+        Reservation.status.in_(ACTIVE_STATUSES),
+        Reservation.start_at < end_at,
+        Reservation.end_at > start_at,
+    ]
+    if ignore_id is not None:
+        conditions.append(Reservation.id != ignore_id)
+    if await session.scalar(select(Reservation.id).where(*conditions).limit(1)) is not None:
+        raise SlotConflictError(f"Table {table.label} is already booked for this time")
+
+
+def _as_slot_conflict(exc: IntegrityError) -> SlotConflictError | None:
+    """The database constraint caught what the application check could not."""
+    if EXCLUSION_CONSTRAINT in str(exc.orig):
+        return SlotConflictError("Table is already booked for this time")
+    return None
+
+
+# --- create ------------------------------------------------------------------------------
 
 
 async def create_reservation(
@@ -46,47 +119,18 @@ async def create_reservation(
         )
         if table is None or not table.is_active:
             raise NotFoundError(f"Table {data.table_id} not found")
-        restaurant = table.restaurant
 
         start_at = data.start_at.astimezone(UTC)
         end_at = resolve_end(
             start_at,
             data.end_at.astimezone(UTC) if data.end_at else None,
-            restaurant.default_duration_minutes,
+            table.restaurant.default_duration_minutes,
         )
 
-        if start_at < now + timedelta(minutes=min_lead_time_minutes):
-            raise ReservationInPastError(
-                f"Reservations must start at least {min_lead_time_minutes} minutes from now"
-            )
-        if data.party_size > table.capacity:
-            raise CapacityExceededError(
-                f"Table {table.label} seats {table.capacity}, party size is {data.party_size}"
-            )
-        if not within_opening_hours(
-            start_at,
-            end_at,
-            timezone=restaurant.timezone,
-            opens_at=restaurant.opens_at,
-            closes_at=restaurant.closes_at,
-        ):
-            raise OutsideOpeningHoursError(
-                f"Reservation must fit within opening hours "
-                f"{restaurant.opens_at:%H:%M}-{restaurant.closes_at:%H:%M} ({restaurant.timezone})"
-            )
-
-        conflict = await session.scalar(
-            select(Reservation.id)
-            .where(
-                Reservation.table_id == table.id,
-                Reservation.status.in_(ACTIVE_STATUSES),
-                Reservation.start_at < end_at,
-                Reservation.end_at > start_at,
-            )
-            .limit(1)
-        )
-        if conflict is not None:
-            raise SlotConflictError(f"Table {table.label} is already booked for this time")
+        _ensure_lead_time(start_at, now=now, minutes=min_lead_time_minutes)
+        _ensure_capacity(table, data.party_size)
+        _ensure_within_opening_hours(table, start_at, end_at)
+        await _ensure_slot_free(session, table, start_at, end_at)
 
         reservation = Reservation(
             table_id=table.id,
@@ -105,13 +149,15 @@ async def create_reservation(
         return reservation
     except IntegrityError as exc:
         await session.rollback()
-        # Database constraint caught what the application check could not.
-        if EXCLUSION_CONSTRAINT in str(exc.orig):
-            raise SlotConflictError("Table is already booked for this time") from exc
+        if conflict := _as_slot_conflict(exc):
+            raise conflict from exc
         raise
     except BaseException:
         await session.rollback()
         raise
+
+
+# --- read --------------------------------------------------------------------------------
 
 
 async def get_reservation(session: AsyncSession, user: User, reservation_id: int) -> Reservation:
@@ -164,12 +210,126 @@ async def list_reservations(
     return list(result), total
 
 
-async def cancel_reservation(session: AsyncSession, user: User, reservation_id: int) -> Reservation:
+# --- change ------------------------------------------------------------------------------
+
+
+async def cancel_reservation(
+    session: AsyncSession, user: User, reservation_id: int, *, now: datetime | None = None
+) -> Reservation:
     reservation = await get_reservation(session, user, reservation_id)
-    if reservation.status not in CANCELLABLE_STATUSES:
-        raise InvalidReservationStateError(
-            f"Reservation in status '{reservation.status.value}' cannot be cancelled"
-        )
+    validate_transition(
+        reservation.status,
+        ReservationStatus.CANCELLED,
+        start_at=reservation.start_at,
+        now=now or utcnow(),
+    )
     reservation.status = ReservationStatus.CANCELLED
     await session.commit()
     return reservation
+
+
+async def change_status(
+    session: AsyncSession,
+    user: User,
+    reservation_id: int,
+    target: ReservationStatus,
+    *,
+    now: datetime | None = None,
+) -> Reservation:
+    """Staff/admin lifecycle changes (see `reservation_status` for the allowed moves)."""
+    reservation = await get_reservation(session, user, reservation_id)
+    if not can_manage_reservation(user, reservation):
+        raise PermissionDeniedError("Only restaurant staff can change a reservation's status")
+    validate_transition(
+        reservation.status, target, start_at=reservation.start_at, now=now or utcnow()
+    )
+    reservation.status = target
+    await session.commit()
+    return reservation
+
+
+async def update_reservation(
+    session: AsyncSession,
+    user: User,
+    reservation_id: int,
+    data: ReservationUpdate,
+    *,
+    min_lead_time_minutes: int = 0,
+    now: datetime | None = None,
+) -> Reservation:
+    """Reschedule, resize or (staff only) move a reservation to another table.
+
+    The tables involved are locked in ascending id order, so two concurrent moves in
+    opposite directions cannot deadlock. Expects a session with no transaction yet.
+    """
+    now = now or utcnow()
+    try:
+        # 1. Read-only: permission check and which tables to lock. The read transaction
+        #    ends before locking so the lock is the first statement of the next one.
+        current = await get_reservation(session, user, reservation_id)
+        old_table_id = current.table_id
+        old_restaurant_id = current.table.restaurant_id
+        target_table_id = data.table_id if data.table_id is not None else old_table_id
+        if target_table_id != old_table_id and user.role == UserRole.GUEST:
+            raise PermissionDeniedError("Only restaurant staff can move a reservation to a table")
+        await session.rollback()
+
+        # 2. Lock, then re-read the now-stable state.
+        for table_id in sorted({old_table_id, target_table_id}):
+            await lock_table(session, table_id)
+        reservation = await session.get(Reservation, reservation_id, populate_existing=True)
+        if reservation is None or reservation.table_id != old_table_id:
+            raise InvalidReservationStateError(
+                "The reservation was changed concurrently; reload it and try again"
+            )
+        if reservation.status not in EDITABLE_STATUSES:
+            raise InvalidReservationStateError(
+                f"A reservation in status '{reservation.status.value}' can no longer be changed"
+            )
+        table = await session.get(
+            DiningTable,
+            target_table_id,
+            options=[joinedload(DiningTable.restaurant)],
+            populate_existing=True,
+        )
+        if table is None or not table.is_active or table.restaurant_id != old_restaurant_id:
+            raise NotFoundError(f"Table {target_table_id} not found")
+
+        # 3. Merge the requested changes, keeping the duration when only the start moves.
+        start_at = data.start_at.astimezone(UTC) if data.start_at else reservation.start_at
+        if data.end_at:
+            end_at = data.end_at.astimezone(UTC)
+        elif data.start_at:
+            end_at = start_at + (reservation.end_at - reservation.start_at)
+        else:
+            end_at = reservation.end_at
+        party_size = data.party_size if data.party_size is not None else reservation.party_size
+        if end_at <= start_at:
+            raise InvalidReservationTimeError("end_at must be later than start_at")
+
+        # 4. Validate the result the same way a new booking is validated.
+        moved_in_time = (start_at, end_at) != (reservation.start_at, reservation.end_at)
+        if user.role == UserRole.GUEST and start_at != reservation.start_at:
+            _ensure_lead_time(start_at, now=now, minutes=min_lead_time_minutes)
+        _ensure_capacity(table, party_size)
+        if moved_in_time:
+            _ensure_within_opening_hours(table, start_at, end_at)
+        if moved_in_time or target_table_id != old_table_id:
+            await _ensure_slot_free(session, table, start_at, end_at, ignore_id=reservation.id)
+
+        reservation.table_id = target_table_id
+        reservation.start_at = start_at
+        reservation.end_at = end_at
+        reservation.party_size = party_size
+        if "notes" in data.model_fields_set:
+            reservation.notes = data.notes
+        await session.commit()
+        return reservation
+    except IntegrityError as exc:
+        await session.rollback()
+        if conflict := _as_slot_conflict(exc):
+            raise conflict from exc
+        raise
+    except BaseException:
+        await session.rollback()
+        raise

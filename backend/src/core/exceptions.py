@@ -66,3 +66,7 @@ class InvalidUserUpdateError(DomainError):
 
 class InvalidRestaurantUpdateError(DomainError):
     code = "invalid_restaurant_update"
+
+
+class InvalidReservationTimeError(DomainError):
+    code = "invalid_time_range"

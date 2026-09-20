@@ -51,6 +51,35 @@ class ReservationCreate(TimeRange):
         return value
 
 
+class ReservationUpdate(BaseModel):
+    """Partial update. Omitting `end_at` while moving `start_at` keeps the duration.
+
+    `table_id` (moving to another table of the same restaurant) is for staff only.
+    `notes` may be set to null to clear it; the other fields may not be null.
+    """
+
+    start_at: AwareDatetime | None = None
+    end_at: AwareDatetime | None = None
+    party_size: StrictPartySize | None = None
+    table_id: int | None = None
+    notes: Annotated[str | None, Field(max_length=500)] = None
+
+    @model_validator(mode="after")
+    def _validate_changes(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("at least one field must be provided")
+        for field in ("start_at", "end_at", "party_size", "table_id"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} must not be null")
+        if self.start_at and self.end_at and self.end_at <= self.start_at:
+            raise ValueError("end_at must be later than start_at")
+        return self
+
+
+class ReservationStatusUpdate(BaseModel):
+    status: ReservationStatus
+
+
 class ReservationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

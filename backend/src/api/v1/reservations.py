@@ -1,12 +1,14 @@
 from fastapi import APIRouter, status
 
-from src.api.deps import CurrentUser, SessionDep, SettingsDep
+from src.api.deps import CurrentUser, SessionDep, SettingsDep, StaffUser
 from src.schemas import (
     Page,
     Pagination,
     ReservationCreate,
     ReservationFilterParams,
     ReservationRead,
+    ReservationStatusUpdate,
+    ReservationUpdate,
 )
 from src.services import reservation_service
 
@@ -55,4 +57,34 @@ async def cancel_reservation(
     reservation_id: int, session: SessionDep, user: CurrentUser
 ) -> ReservationRead:
     reservation = await reservation_service.cancel_reservation(session, user, reservation_id)
+    return ReservationRead.model_validate(reservation)
+
+
+@router.patch("/{reservation_id}", response_model=ReservationRead)
+async def update_reservation(
+    reservation_id: int,
+    data: ReservationUpdate,
+    session: SessionDep,
+    settings: SettingsDep,
+    user: CurrentUser,
+) -> ReservationRead:
+    """Reschedule, change party size or notes; staff may also move it to another table."""
+    reservation = await reservation_service.update_reservation(
+        session,
+        user,
+        reservation_id,
+        data,
+        min_lead_time_minutes=settings.reservation_min_lead_time_minutes,
+    )
+    return ReservationRead.model_validate(reservation)
+
+
+@router.patch("/{reservation_id}/status", response_model=ReservationRead)
+async def change_status(
+    reservation_id: int, data: ReservationStatusUpdate, session: SessionDep, user: StaffUser
+) -> ReservationRead:
+    """Staff lifecycle changes: confirm, seat, complete, no-show, cancel."""
+    reservation = await reservation_service.change_status(
+        session, user, reservation_id, data.status
+    )
     return ReservationRead.model_validate(reservation)

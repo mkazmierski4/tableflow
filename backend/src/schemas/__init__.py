@@ -5,6 +5,8 @@ from src.schemas.reservation import (
     ReservationFilterParams,
     ReservationFilters,
     ReservationRead,
+    ReservationStatusUpdate,
+    ReservationUpdate,
 )
 from src.schemas.restaurant import RestaurantCreate, RestaurantRead, RestaurantUpdate
 from src.schemas.table import TableCreate, TableRead, TableUpdate
@@ -19,6 +21,8 @@ __all__ = [
     "ReservationFilterParams",
     "ReservationFilters",
     "ReservationRead",
+    "ReservationStatusUpdate",
+    "ReservationUpdate",
     "RestaurantCreate",
     "RestaurantRead",
     "RestaurantUpdate",
