@@ -52,7 +52,12 @@ class TestAvailabilityQuery:
 
 
 class TestRestaurantCreate:
-    base: ClassVar[dict[str, Any]] = {"name": "Bistro", "opens_at": "10:00", "closes_at": "22:00"}
+    base: ClassVar[dict[str, Any]] = {
+        "name": "Bistro",
+        "city": "Kraków",
+        "opens_at": "10:00",
+        "closes_at": "22:00",
+    }
 
     def test_defaults(self) -> None:
         data = RestaurantCreate.model_validate(self.base)
@@ -68,6 +73,8 @@ class TestRestaurantCreate:
             {"opens_at": "10:00", "closes_at": "10:00"},
             {"default_duration_minutes": 5},
             {"name": "   "},
+            {"city": "   "},
+            {"city": ""},
         ],
     )
     def test_invalid(self, override: dict[str, Any]) -> None:

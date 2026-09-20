@@ -22,13 +22,29 @@ async def get_restaurant(session: AsyncSession, restaurant_id: int) -> Restauran
 
 
 async def list_restaurants(
-    session: AsyncSession, *, limit: int, offset: int
+    session: AsyncSession, *, limit: int, offset: int, city: str | None = None
 ) -> tuple[list[Restaurant], int]:
-    total = await session.scalar(select(func.count()).select_from(Restaurant)) or 0
+    """`city` matches case-insensitively and exactly (use `list_cities` for valid values)."""
+    conditions = [func.lower(Restaurant.city) == city.strip().lower()] if city else []
+    total = (
+        await session.scalar(select(func.count()).select_from(Restaurant).where(*conditions)) or 0
+    )
     result = await session.scalars(
-        select(Restaurant).order_by(Restaurant.name, Restaurant.id).limit(limit).offset(offset)
+        select(Restaurant)
+        .where(*conditions)
+        .order_by(Restaurant.name, Restaurant.id)
+        .limit(limit)
+        .offset(offset)
     )
     return list(result), total
+
+
+async def list_cities(session: AsyncSession) -> list[str]:
+    """Distinct cities that have at least one restaurant, alphabetically."""
+    result = await session.scalars(
+        select(Restaurant.city).where(Restaurant.city != "").distinct().order_by(Restaurant.city)
+    )
+    return list(result)
 
 
 async def update_restaurant(

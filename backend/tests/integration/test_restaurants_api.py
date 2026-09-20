@@ -31,7 +31,7 @@ class TestCreateAndRead:
         self, client: AsyncClient, guest: TestUser, make_user: MakeUser, venue: dict[str, Any]
     ) -> None:
         staff = await make_user(UserRole.STAFF, restaurant_id=venue["restaurant"]["id"])
-        payload = {"name": "X", "opens_at": "10:00", "closes_at": "20:00"}
+        payload = {"name": "X", "city": "Warsaw", "opens_at": "10:00", "closes_at": "20:00"}
 
         assert (await client.post(f"{API}/restaurants", json=payload)).status_code == 401
         for user in (guest, staff):
@@ -48,6 +48,7 @@ class TestCreateAndRead:
             f"{API}/restaurants",
             json={
                 "name": "X",
+                "city": "Warsaw",
                 "timezone": "Mars/Olympus",
                 "opens_at": "12:00",
                 "closes_at": "20:00",
@@ -76,6 +77,75 @@ class TestList:
         self, client: AsyncClient, params: dict[str, int]
     ) -> None:
         assert (await client.get(f"{API}/restaurants", params=params)).status_code == 422
+
+
+class TestCityFilter:
+    async def seed(self, client: AsyncClient, admin: TestUser) -> None:
+        for name, city in (
+            ("Alpha", "Warsaw"),
+            ("Bravo", "Kraków"),
+            ("Charlie", "Warsaw"),
+            ("Delta", "Gdańsk"),
+        ):
+            await create_restaurant(client, headers=admin.headers, name=name, city=city)
+
+    async def test_lists_distinct_cities_alphabetically(
+        self, client: AsyncClient, admin: TestUser
+    ) -> None:
+        await self.seed(client, admin)
+        response = await client.get(f"{API}/restaurants/cities")  # public, not parsed as an id
+        assert response.status_code == 200
+        assert response.json() == ["Gdańsk", "Kraków", "Warsaw"]
+
+    async def test_no_restaurants_means_no_cities(self, client: AsyncClient) -> None:
+        assert (await client.get(f"{API}/restaurants/cities")).json() == []
+
+    async def test_filters_by_city_case_insensitively(
+        self, client: AsyncClient, admin: TestUser
+    ) -> None:
+        await self.seed(client, admin)
+        for value in ("Warsaw", "warsaw", "  WARSAW "):
+            body = (await client.get(f"{API}/restaurants", params={"city": value})).json()
+            assert [r["name"] for r in body["items"]] == ["Alpha", "Charlie"], value
+            assert body["total"] == 2
+        assert all(r["city"] == "Warsaw" for r in body["items"])
+
+    async def test_filter_composes_with_pagination(
+        self, client: AsyncClient, admin: TestUser
+    ) -> None:
+        await self.seed(client, admin)
+        body = (
+            await client.get(
+                f"{API}/restaurants", params={"city": "Warsaw", "limit": 1, "offset": 1}
+            )
+        ).json()
+        assert [r["name"] for r in body["items"]] == ["Charlie"]
+        assert body["total"] == 2
+
+    async def test_unknown_city_is_an_empty_page_not_an_error(
+        self, client: AsyncClient, admin: TestUser
+    ) -> None:
+        await self.seed(client, admin)
+        body = (await client.get(f"{API}/restaurants", params={"city": "Atlantis"})).json()
+        assert (body["items"], body["total"]) == ([], 0)
+
+    async def test_city_is_required_and_updatable(
+        self, client: AsyncClient, admin: TestUser, venue: dict[str, Any]
+    ) -> None:
+        missing = await client.post(
+            f"{API}/restaurants",
+            json={"name": "X", "opens_at": "10:00", "closes_at": "20:00"},
+            headers=admin.headers,
+        )
+        assert missing.status_code == 422
+
+        rid = venue["restaurant"]["id"]
+        moved = await client.patch(
+            f"{API}/restaurants/{rid}", json={"city": "Poznań"}, headers=admin.headers
+        )
+        assert moved.status_code == 200
+        assert moved.json()["city"] == "Poznań"
+        assert (await client.get(f"{API}/restaurants/cities")).json() == ["Poznań"]
 
 
 class TestUpdate:

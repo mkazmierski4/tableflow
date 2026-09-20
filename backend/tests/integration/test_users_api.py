@@ -70,7 +70,7 @@ async def test_staff_can_be_moved_to_another_restaurant(
     other = (
         await client.post(
             "/api/v1/restaurants",
-            json={"name": "Other", "opens_at": "10:00", "closes_at": "20:00"},
+            json={"name": "Other", "city": "Gdansk", "opens_at": "10:00", "closes_at": "20:00"},
             headers=admin.headers,
         )
     ).json()

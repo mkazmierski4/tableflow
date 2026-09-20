@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Name = Annotated[str, Field(min_length=1, max_length=120)]
+City = Annotated[str, Field(min_length=1, max_length=80)]
 DefaultDuration = Annotated[int, Field(ge=15, le=480)]
 
 
@@ -25,18 +26,19 @@ def _naive_time(value: time) -> time:
 def _non_blank(value: str) -> str:
     value = value.strip()
     if not value:
-        raise ValueError("name must not be blank")
+        raise ValueError("must not be blank")
     return value
 
 
 class RestaurantCreate(BaseModel):
     name: Name
+    city: City
     timezone: str = "UTC"
     opens_at: time
     closes_at: time
     default_duration_minutes: DefaultDuration = 90
 
-    _name = field_validator("name")(_non_blank)
+    _name = field_validator("name", "city")(_non_blank)
     _timezone = field_validator("timezone")(_valid_timezone)
     _hours = field_validator("opens_at", "closes_at")(_naive_time)
 
@@ -51,14 +53,15 @@ class RestaurantUpdate(BaseModel):
     """Partial update: only the fields that are sent change; `null` is not a valid value."""
 
     name: Name | None = None
+    city: City | None = None
     timezone: str | None = None
     opens_at: time | None = None
     closes_at: time | None = None
     default_duration_minutes: DefaultDuration | None = None
 
-    @field_validator("name")
+    @field_validator("name", "city")
     @classmethod
-    def _name(cls, value: str | None) -> str | None:
+    def _text(cls, value: str | None) -> str | None:
         return None if value is None else _non_blank(value)
 
     @field_validator("timezone")
@@ -84,6 +87,7 @@ class RestaurantRead(BaseModel):
 
     id: int
     name: str
+    city: str
     timezone: str
     opens_at: time
     closes_at: time

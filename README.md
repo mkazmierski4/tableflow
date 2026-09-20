@@ -109,8 +109,9 @@ Base path: `/api/v1`. Domain errors share one shape: `{"error": {"code": "slot_c
 | `POST` | `/auth/login` | OAuth2 password login, returns a bearer token | public |
 | `GET` | `/auth/me` | Current user | any user |
 | `PATCH` | `/users/{id}` | Change role, staff restaurant or `is_active` | admin |
-| `GET` | `/restaurants` | List restaurants (paginated) | public |
-| `POST` | `/restaurants` | Create a restaurant (`opens_at` / `closes_at`, IANA `timezone`) | admin |
+| `GET` | `/restaurants?city=` | List restaurants (paginated), optionally filtered by city (case-insensitive) | public |
+| `GET` | `/restaurants/cities` | Cities that have restaurants, for filter pickers | public |
+| `POST` | `/restaurants` | Create a restaurant (`name`, `city`, `opens_at` / `closes_at`, IANA `timezone`) | admin |
 | `GET` | `/restaurants/{id}` | Restaurant details | public |
 | `PATCH` | `/restaurants/{id}` | Partially update a restaurant | admin |
 | `GET` | `/restaurants/{id}/tables` | List tables | public |

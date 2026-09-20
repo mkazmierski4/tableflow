@@ -141,6 +141,7 @@ async def create_restaurant(
 ) -> dict[str, Any]:
     payload = {
         "name": "Trattoria",
+        "city": "Warsaw",
         "timezone": "Europe/Warsaw",
         "opens_at": "12:00",
         "closes_at": "23:00",

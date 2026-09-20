@@ -103,7 +103,7 @@ tableflow/
 │   ├── Dockerfile
 │   ├── alembic.ini
 │   ├── alembic/                     # migracje
-│   │   └── versions/                # 0001 schemat + exclusion constraint (PG), 0002 users + user_id
+│   │   └── versions/                # 0001 schemat + exclusion constraint (PG), 0002 users + user_id, 0003 restaurant city
 │   ├── src/
 │   │   ├── main.py                  # app factory, lifespan, CORS
 │   │   ├── cli.py                   # python -m src.cli create-admin

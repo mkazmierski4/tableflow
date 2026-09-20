@@ -19,6 +19,7 @@ class Restaurant(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
+    city: Mapped[str] = mapped_column(String(80), index=True)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
     opens_at: Mapped[time]
     closes_at: Mapped[time]

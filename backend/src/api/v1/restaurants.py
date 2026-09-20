@@ -20,9 +20,15 @@ router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
 
 @router.get("", response_model=Page[RestaurantRead])
-async def list_restaurants(session: SessionDep, page: Pagination) -> Page[RestaurantRead]:
+async def list_restaurants(
+    session: SessionDep,
+    page: Pagination,
+    city: Annotated[
+        str | None, Query(max_length=80, description="Exact city, case-insensitive")
+    ] = None,
+) -> Page[RestaurantRead]:
     items, total = await restaurant_service.list_restaurants(
-        session, limit=page.limit, offset=page.offset
+        session, limit=page.limit, offset=page.offset, city=city
     )
     return Page(
         items=[RestaurantRead.model_validate(r) for r in items],
@@ -30,6 +36,12 @@ async def list_restaurants(session: SessionDep, page: Pagination) -> Page[Restau
         limit=page.limit,
         offset=page.offset,
     )
+
+
+# Declared before `/{restaurant_id}` so "cities" is not parsed as an id.
+@router.get("/cities", response_model=list[str])
+async def list_cities(session: SessionDep) -> list[str]:
+    return await restaurant_service.list_cities(session)
 
 
 @router.post("", response_model=RestaurantRead, status_code=status.HTTP_201_CREATED)
