@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, select, text
@@ -67,8 +67,12 @@ async def create_reservation(
             raise NotFoundError(f"Table {data.table_id} not found")
         restaurant = table.restaurant
 
-        start_at = data.start_at
-        end_at = resolve_end(start_at, data.end_at, restaurant.default_duration_minutes)
+        start_at = data.start_at.astimezone(UTC)
+        end_at = resolve_end(
+            start_at,
+            data.end_at.astimezone(UTC) if data.end_at else None,
+            restaurant.default_duration_minutes,
+        )
 
         if start_at < now + timedelta(minutes=min_lead_time_minutes):
             raise ReservationInPastError(

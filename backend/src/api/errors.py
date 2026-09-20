@@ -17,9 +17,9 @@ STATUS_BY_ERROR: dict[type[DomainError], int] = {
     SlotConflictError: status.HTTP_409_CONFLICT,
     InvalidReservationStateError: status.HTTP_409_CONFLICT,
     DuplicateTableError: status.HTTP_409_CONFLICT,
-    CapacityExceededError: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    OutsideOpeningHoursError: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    ReservationInPastError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    CapacityExceededError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    OutsideOpeningHoursError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ReservationInPastError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
