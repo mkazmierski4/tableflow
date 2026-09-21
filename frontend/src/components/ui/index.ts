@@ -3,6 +3,7 @@ export { Badge } from './Badge';
 export { BottomSheet } from './BottomSheet';
 export { Button } from './Button';
 export { Card, PressableCard } from './Card';
+export { ConfirmDialog } from './ConfirmDialog';
 export { EmptyState } from './EmptyState';
 export { FilterChip } from './FilterChip';
 export { Icon, type IconName } from './Icon';
