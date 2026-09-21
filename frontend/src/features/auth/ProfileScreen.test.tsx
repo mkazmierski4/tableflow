@@ -6,7 +6,6 @@ import { tokenStorage } from '@/lib/token-storage';
 import { makeUser, renderWithProviders } from '@/test-utils';
 
 import { ProfileScreen } from './ProfileScreen';
-import { ReservationsScreen } from './ReservationsScreen';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn() };
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
@@ -88,22 +87,5 @@ describe('ProfileScreen', () => {
     await render(<ProfileScreen />);
 
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Dark' })).toBeSelected());
-  });
-});
-
-describe('ReservationsScreen', () => {
-  it('asks a visitor to sign in', async () => {
-    await render(<ReservationsScreen />);
-    expect(screen.getByTestId('reservations-signed-out')).toBeTruthy();
-
-    fireEvent.press(screen.getByRole('button', { name: 'Sign in or create account' }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/sign-in');
-  });
-
-  it('is honest that listing is not built yet for signed-in users', async () => {
-    await signedInAs();
-    await render(<ReservationsScreen />);
-
-    expect(await screen.findByTestId('reservations-soon')).toBeTruthy();
   });
 });

@@ -1,3 +1,3 @@
-import { ReservationsScreen } from '@/features/auth/ReservationsScreen';
+import { ReservationsScreen } from '@/features/reservations/ReservationsScreen';
 
 export default ReservationsScreen;
