@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { BookingPrefsProvider } from '@/features/reservations/BookingPrefs';
 import { ApiError } from '@/lib/api';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
@@ -44,6 +45,8 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="restaurant/[id]" />
+        <Stack.Screen name="reservation/[id]" />
+        <Stack.Screen name="confirmed" options={{ gestureEnabled: false, animation: 'fade' }} />
         {/* Only reachable while signed out / for staff and admins; the router redirects otherwise. */}
         <Stack.Protected guard={state.status === 'signedOut'}>
           <Stack.Screen name="(auth)/sign-in" options={{ presentation: 'modal' }} />
@@ -79,7 +82,9 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <AuthProvider>
-              <Navigator />
+              <BookingPrefsProvider>
+                <Navigator />
+              </BookingPrefsProvider>
             </AuthProvider>
           </ThemeProvider>
         </QueryClientProvider>

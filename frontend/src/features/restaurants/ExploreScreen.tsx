@@ -4,9 +4,12 @@ import { ScrollView, TextInput, View } from 'react-native';
 
 import { AppText, EmptyState, FilterChip, Icon, Screen } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { DEFAULT_PARTY_SIZE, useBookingPrefs } from '@/features/reservations/BookingPrefs';
+import { formatDayKey, pluralGuests } from '@/features/reservations/format';
 import { useTheme } from '@/theme/ThemeProvider';
 
 import { CitySheet } from './CitySheet';
+import { DateGuestsSheet } from './DateGuestsSheet';
 import { RestaurantCard } from './RestaurantCard';
 import { isOpenNow } from './hours';
 import { useCities, useRestaurants } from './hooks';
@@ -20,11 +23,13 @@ export function ExploreScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { user } = useAuth();
+  const prefs = useBookingPrefs();
 
   const [city, setCity] = useState<string | null>(null);
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [query, setQuery] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [dateGuestsOpen, setDateGuestsOpen] = useState(false);
 
   const restaurants = useRestaurants(city);
   const cities = useCities();
@@ -87,6 +92,22 @@ export function ExploreScreen() {
           onPress={() => setSheetOpen(true)}
         />
         <FilterChip
+          testID="date-chip"
+          label={prefs.dateKey ? formatDayKey(prefs.dateKey) : 'Today'}
+          selected={prefs.dateKey !== null}
+          leadingIcon="calendar"
+          accessibilityHint="Choose a date and party size"
+          onPress={() => setDateGuestsOpen(true)}
+        />
+        <FilterChip
+          testID="guests-chip"
+          label={pluralGuests(prefs.partySize)}
+          selected={prefs.partySize !== DEFAULT_PARTY_SIZE}
+          leadingIcon="users"
+          accessibilityHint="Choose a date and party size"
+          onPress={() => setDateGuestsOpen(true)}
+        />
+        <FilterChip
           testID="open-now-chip"
           label="Open now"
           selected={openNowOnly}
@@ -132,6 +153,8 @@ export function ExploreScreen() {
           ))}
         </View>
       )}
+
+      <DateGuestsSheet visible={dateGuestsOpen} onClose={() => setDateGuestsOpen(false)} />
 
       <CitySheet
         visible={sheetOpen}

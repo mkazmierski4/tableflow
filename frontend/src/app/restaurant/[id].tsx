@@ -1,3 +1,3 @@
-import { RestaurantScreen } from '@/features/restaurants/RestaurantScreen';
+import { BookingScreen } from '@/features/reservations/BookingScreen';
 
-export default RestaurantScreen;
+export default BookingScreen;

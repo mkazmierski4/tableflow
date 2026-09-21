@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
 
@@ -37,6 +37,9 @@ export function validate(
 
 export function SignInScreen() {
   const router = useRouter();
+  const { next } = useLocalSearchParams<{ next?: string }>();
+  // Only in-app paths: "//host" or "https://…" must never become a redirect target.
+  const returnTo: Href = typeof next === 'string' && /^\/(?!\/)/.test(next) ? (next as Href) : '/';
   const { signIn, signUp } = useAuth();
 
   const [mode, setMode] = useState<Mode>('signIn');
@@ -63,7 +66,7 @@ export function SignInScreen() {
     try {
       if (mode === 'signIn') await signIn(email, password);
       else await signUp({ email, password, full_name: fullName.trim() });
-      router.replace('/');
+      router.replace(returnTo);
     } catch (error) {
       if (error instanceof ApiError) {
         setErrors(error.fieldErrors);

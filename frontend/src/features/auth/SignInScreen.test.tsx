@@ -7,7 +7,11 @@ import { makeUser, renderWithProviders } from '@/test-utils';
 import { SignInScreen } from './SignInScreen';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn() };
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+let mockParams: { next?: string } = {};
+jest.mock('expo-router', () => ({
+  useRouter: () => mockRouter,
+  useLocalSearchParams: () => mockParams,
+}));
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
@@ -29,6 +33,7 @@ function fill(label: string, value: string) {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockParams = {};
   await tokenStorage.clear();
   mockedAuth.me.mockRejectedValue(new ApiError(401, 'not_authenticated', 'no session'));
 });
@@ -42,6 +47,24 @@ describe('signing in', () => {
     expect(await screen.findByText('Enter a valid e-mail address.')).toBeTruthy();
     expect(screen.getByText('Enter your password.')).toBeTruthy();
     expect(mockedAuth.login).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an in-app path', '/restaurant/7', '/restaurant/7'],
+    ['a protocol-relative URL', '//evil.example', '/'],
+    ['an absolute URL', 'https://evil.example', '/'],
+    ['a relative path', 'restaurant/7', '/'],
+  ])('returns to %s after signing in', async (_name, next, expected) => {
+    mockParams = { next };
+    mockedAuth.login.mockResolvedValue({ access_token: 'tok', token_type: 'bearer' });
+    mockedAuth.me.mockResolvedValue(makeUser());
+    await renderScreen();
+
+    fill('Email', 'ann@example.com');
+    fill('Password', 'secret-pass');
+    fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(expected));
   });
 
   it('signs in, stores the session and leaves the screen', async () => {

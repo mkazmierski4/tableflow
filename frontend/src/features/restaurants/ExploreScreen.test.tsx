@@ -3,6 +3,8 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { ApiError, restaurantApi } from '@/lib/api';
 import { makeRestaurant, page, renderWithProviders } from '@/test-utils';
 
+import { formatDayKey, upcomingDays } from '@/features/reservations/format';
+
 import { ExploreScreen } from './ExploreScreen';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn() };
@@ -178,5 +180,73 @@ describe('local filters', () => {
 
     expect(await screen.findByText('No restaurants have been added yet.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+});
+
+describe('date and guests', () => {
+  it('starts on today for two guests, neither highlighted', async () => {
+    await renderScreen();
+    await screen.findByText('Trattoria Sole');
+
+    expect(screen.getByTestId('date-chip')).toHaveTextContent('Today');
+    expect(screen.getByTestId('guests-chip')).toHaveTextContent('2 guests');
+    expect(screen.getByTestId('date-chip')).not.toBeSelected();
+    expect(screen.getByTestId('guests-chip')).not.toBeSelected();
+  });
+
+  it('applies the chosen party size and date from the sheet', async () => {
+    await renderScreen();
+    await screen.findByText('Trattoria Sole');
+
+    fireEvent.press(screen.getByTestId('guests-chip'));
+    fireEvent.press(await screen.findByRole('button', { name: 'More guests' }));
+    expect(screen.getByRole('button', { name: /^Apply · Today · 3 guests$/ })).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: /^Apply/ }));
+
+    await waitFor(() => expect(screen.getByTestId('guests-chip')).toHaveTextContent('3 guests'));
+    expect(screen.getByTestId('guests-chip')).toBeSelected();
+    expect(screen.getByTestId('date-chip')).toHaveTextContent('Today');
+    expect(screen.queryByText('When and who')).toBeNull();
+  });
+
+  it('picks another day', async () => {
+    await renderScreen();
+    await screen.findByText('Trattoria Sole');
+
+    fireEvent.press(screen.getByTestId('date-chip'));
+    const days = upcomingDays(Intl.DateTimeFormat().resolvedOptions().timeZone, 3);
+    fireEvent.press(await screen.findByTestId(`day-${days[2]!.key}`));
+    fireEvent.press(screen.getByRole('button', { name: /^Apply/ }));
+
+    await waitFor(() => expect(screen.getByTestId('date-chip')).toBeSelected());
+    expect(screen.getByTestId('date-chip')).toHaveTextContent(formatDayKey(days[2]!.key));
+  });
+
+  it('discards a choice that was not applied', async () => {
+    await renderScreen();
+    await screen.findByText('Trattoria Sole');
+
+    fireEvent.press(screen.getByTestId('guests-chip'));
+    fireEvent.press(await screen.findByRole('button', { name: 'More guests' }));
+    fireEvent.press(screen.getByRole('button', { name: 'More guests' }));
+    fireEvent.press(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+
+    await waitFor(() => expect(screen.queryByText('When and who')).toBeNull());
+    expect(screen.getByTestId('guests-chip')).toHaveTextContent('2 guests');
+  });
+});
+
+describe('table count', () => {
+  it('shows how many tables a restaurant has', async () => {
+    mockedApi.list.mockResolvedValue(
+      page([
+        makeRestaurant({ id: 1, name: 'Trattoria Sole', table_count: 12 }),
+        makeRestaurant({ id: 2, name: 'Tiny Bar', table_count: 1 }),
+      ]),
+    );
+    await renderScreen();
+
+    expect(await screen.findByText('12 tables')).toBeTruthy();
+    expect(screen.getByText('1 table')).toBeTruthy();
   });
 });

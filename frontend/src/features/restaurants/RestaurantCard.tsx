@@ -48,12 +48,15 @@ export function RestaurantCard({ restaurant, onPress, now }: RestaurantCardProps
           <AppText variant="bodySmall" numberOfLines={1}>
             {details}
           </AppText>
-          <View className="mt-0.5">
+          <View className="mt-0.5 flex-row items-center gap-2">
             {open ? (
               <Badge label="Open now" tone="accent" />
             ) : (
               <Badge label={`Opens ${shortTime(restaurant.opens_at)}`} tone="neutral" />
             )}
+            <AppText variant="caption">
+              {restaurant.table_count} {restaurant.table_count === 1 ? 'table' : 'tables'}
+            </AppText>
           </View>
         </View>
         <Icon name="chevron-right" size={20} color="muted" />
