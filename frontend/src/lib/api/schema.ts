@@ -224,6 +224,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/restaurants/{restaurant_id}/availability/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Slots
+         * @description Start times for a day (every 30 minutes) with how many tables are free for the party.
+         */
+        get: operations["get_slots_api_v1_restaurants__restaurant_id__availability_slots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/restaurants/{restaurant_id}/tables": {
         parameters: {
             query?: never;
@@ -401,6 +421,12 @@ export interface components {
             notes: string | null;
             /** Party Size */
             party_size: number;
+            /** Restaurant Id */
+            restaurant_id: number;
+            /** Restaurant Name */
+            restaurant_name: string;
+            /** Restaurant Timezone */
+            restaurant_timezone: string;
             /**
              * Start At
              * Format: date-time
@@ -409,6 +435,8 @@ export interface components {
             status: components["schemas"]["ReservationStatus"];
             /** Table Id */
             table_id: number;
+            /** Table Label */
+            table_label: string;
             /** User Id */
             user_id: number | null;
         };
@@ -492,6 +520,11 @@ export interface components {
              * Format: time
              */
             opens_at: string;
+            /**
+             * Table Count
+             * @default 0
+             */
+            table_count: number;
             /** Timezone */
             timezone: string;
         };
@@ -512,6 +545,41 @@ export interface components {
             opens_at?: string | null;
             /** Timezone */
             timezone?: string | null;
+        };
+        /** SlotRead */
+        SlotRead: {
+            /** Available */
+            available: boolean;
+            /**
+             * End At
+             * Format: date-time
+             */
+            end_at: string;
+            /** Free Tables */
+            free_tables: number;
+            /** Local Time */
+            local_time: string;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+        };
+        /** SlotsRead */
+        SlotsRead: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Duration Minutes */
+            duration_minutes: number;
+            /** Party Size */
+            party_size: number;
+            /** Slots */
+            slots: components["schemas"]["SlotRead"][];
+            /** Timezone */
+            timezone: string;
         };
         /** TableCreate */
         TableCreate: {
@@ -1109,6 +1177,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AvailabilityRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_slots_api_v1_restaurants__restaurant_id__availability_slots_get: {
+        parameters: {
+            query: {
+                date: string;
+                party_size: number;
+            };
+            header?: never;
+            path: {
+                restaurant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotsRead"];
                 };
             };
             /** @description Validation Error */
