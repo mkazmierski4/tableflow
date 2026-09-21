@@ -39,7 +39,8 @@ export function TableTile({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={`Table ${label}, seats ${seats}, ${spec.label}`}
-      accessibilityState={{ selected, disabled: !onPress }}
+      aria-selected={selected}
+      aria-disabled={!onPress}
       onPress={onPress}
       className={cn(
         'h-[72px] w-[72px] items-center justify-center',

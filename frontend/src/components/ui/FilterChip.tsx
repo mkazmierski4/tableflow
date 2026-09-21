@@ -32,7 +32,7 @@ export function FilterChip({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ selected }}
+      aria-selected={selected}
       onPress={onPress}
       className={cn(
         'h-10 shrink-0 flex-row items-center gap-1.5 rounded-full border px-3.5',

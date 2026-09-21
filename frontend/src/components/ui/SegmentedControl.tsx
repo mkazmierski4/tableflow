@@ -31,7 +31,7 @@ export function SegmentedControl<T extends string>({
           <Pressable
             key={option.value}
             accessibilityRole="tab"
-            accessibilityState={{ selected }}
+            aria-selected={selected}
             onPress={() => onChange(option.value)}
             className={cn(
               'h-11 flex-1 items-center justify-center rounded-chip',

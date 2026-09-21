@@ -27,7 +27,7 @@ export function CitySheet({ visible, cities, selected, onSelect, onClose }: City
             <Pressable
               key={option.label}
               accessibilityRole="radio"
-              accessibilityState={{ checked: active }}
+              aria-checked={active}
               accessibilityLabel={option.label}
               onPress={() => onSelect(option.value)}
               className={cn(
