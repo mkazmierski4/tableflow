@@ -50,6 +50,11 @@ Projekt portfolio publikowany na GitHub – jakość kodu, historia commitów i 
 - Komponenty małe i typowane; logika w hookach (`hooks/`), wywołania API w `lib/api/`, brak `fetch` w komponentach.
 - Stan serwerowy: TanStack Query; stan lokalny: React state / Zustand (tylko jeśli potrzebny).
 - Dostępność: `accessibilityLabel`, kontrast, obsługa `prefers-reduced-motion`.
+  Stany kontrolek przez `aria-selected` / `aria-checked` / `aria-disabled` / `aria-busy` – react-native-web nie mapuje `accessibilityState` na DOM.
+- Nie zagnieżdżamy przycisków (Pressable w Pressable to nieprawidłowy HTML na webie): karta = pressable z podsumowaniem + rodzeństwo z akcjami.
+- Logowanie z innego ekranu: `/sign-in?next=<ścieżka>`; honorujemy tylko ścieżki zaczynające się od pojedynczego `/`. Bramka `Stack.Protected` sama odsyła na `/`.
+- Metro: `tslib` przypięty do wersji CommonJS (`metro.config.js`), inaczej zależności Moti wywracają render webowy; Jest transformuje `moti` (`jest.config.js`).
+- Po zmianach w kodzie frontendu weryfikujemy przepływ w prawdziwej przeglądarce z prawdziwym backendem (Metro potrafi serwować starą paczkę – restart z `--clear`).
 
 ## Komendy
 
@@ -186,13 +191,17 @@ tableflow/
         │   ├── +not-found.tsx
         │   ├── (tabs)/               # gość: index (Explore), reservations, profile
         │   ├── (auth)/sign-in.tsx    # modal, tylko gdy niezalogowany
-        │   ├── (staff)/              # tylko staff/admin (Faza 4: today, floor)
-        │   └── restaurant/[id].tsx
+        │   ├── (staff)/              # tylko staff/admin (Faza 4B: today, floor)
+        │   ├── restaurant/[id].tsx   # rezerwacja stolika (BookingScreen)
+        │   ├── reservation/[id].tsx  # szczegóły rezerwacji
+        │   └── confirmed.tsx         # potwierdzenie rezerwacji
         ├── features/                 # ekrany i logika per domena
-        │   ├── auth/                 # AuthProvider, SignInScreen, ProfileScreen, ReservationsScreen
-        │   └── restaurants/          # ExploreScreen (+ filtr miasta), RestaurantScreen, hooki, godziny otwarcia
+        │   ├── auth/                 # AuthProvider, SignInScreen, ProfileScreen
+        │   ├── restaurants/          # ExploreScreen (+ filtr miasta, data/goście), hooki, godziny otwarcia
+        │   └── reservations/         # BookingScreen, ReservationsScreen, szczegóły, potwierdzenie, RescheduleSheet, sloty/pickery
         ├── components/ui/            # design system: AppText, Button, Input, FilterChip, Badge, StatusChip,
-        │                             #   Card, SegmentedControl, BottomSheet, TableTile, EmptyState, Screen, Icon
+        │                             #   Card, SegmentedControl, BottomSheet, ConfirmDialog, TableTile, EmptyState, Screen, Icon
+        ├── components/motion/        # Reveal, SuccessMark (Reanimated + Moti, z obsługą reduced motion)
         ├── theme/                    # tokens.ts (paleta + zmienne CSS), ThemeProvider (system/dark/light)
         └── lib/
             ├── api/                  # client.ts (błędy, token), index.ts (endpointy), schema.ts (generowany)
@@ -208,5 +217,5 @@ tableflow/
 1. Setup FastAPI + baza + walidacja rezerwacji i anti-overbooking ✅
 2. Auth (JWT) + zarządzanie restauracjami, stolikami i statusami rezerwacji + CI ✅
 3. Inicjalizacja Expo + NativeWind + nawigacja + motyw + warstwa API ✅
-4. Plan sali, rezerwacje, animacje (Reanimated/Moti)
+4. Rezerwacje gościa (4A ✅), plan sali i konsola staffu, animacje (Reanimated/Moti) (4B)
 5. Polish, skróty klawiszowe, CI, deployment

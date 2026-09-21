@@ -7,7 +7,7 @@
 
 An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via Expo) that lets guests book a table in seconds and gives restaurant staff a live view of the floor — with **guaranteed protection against double-booking**.
 
-> **Status:** Phase 3 – the backend is feature-complete (JWT auth with guest/staff/admin roles, restaurants and tables, reservations with anti-double-booking, rescheduling, staff status lifecycle). The Expo app has its design system, navigation, theming and API layer, with working sign-in and restaurant discovery (search, city filter, open now). Booking and the staff floor plan are next (see [Roadmap](#roadmap)).
+> **Status:** Phase 4A – the backend is feature-complete (JWT auth with guest/staff/admin roles, restaurants and tables, availability slots, reservations with anti-double-booking, rescheduling, staff status lifecycle). The Expo app lets a guest discover restaurants, book a table from real availability (with graceful handling of a table taken in the meantime), and view, reschedule and cancel reservations. The staff floor plan is next (see [Roadmap](#roadmap)).
 
 ---
 
@@ -206,7 +206,7 @@ docker compose up --build       # applies migrations, then serves http://localho
 - [x] **Phase 1** – FastAPI + database setup, reservation validation and anti-double-booking
 - [x] **Phase 2** – Authentication (JWT), restaurants and tables management
 - [x] **Phase 3** – Expo + NativeWind app shell, navigation, theming, API layer
-- [ ] **Phase 4** – Floor plan, booking flow, Reanimated/Moti animations
+- [ ] **Phase 4** – Booking flow ✅ (4A), staff floor plan and day list with Reanimated/Moti animations (4B)
 - [ ] **Phase 5** – Keyboard shortcuts, polish, frontend CI, deployment
 
 ## Conventions
