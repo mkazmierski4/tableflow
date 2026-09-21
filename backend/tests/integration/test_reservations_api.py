@@ -140,3 +140,30 @@ async def test_cancelling_twice_is_a_conflict(client: AsyncClient, venue: dict[s
 async def test_unknown_reservation_is_404(client: AsyncClient) -> None:
     assert (await client.get(f"{URL}/999")).status_code == 404
     assert (await client.post(f"{URL}/999/cancel")).status_code == 404
+
+
+async def test_every_response_names_the_table_and_restaurant(
+    client: AsyncClient, venue: dict[str, Any]
+) -> None:
+    expected = {
+        "table_label": "T1",
+        "restaurant_id": venue["restaurant"]["id"],
+        "restaurant_name": "Trattoria",
+        "restaurant_timezone": "Europe/Warsaw",
+    }
+
+    def names(body: dict[str, Any]) -> dict[str, Any]:
+        return {key: body[key] for key in expected}
+
+    created = await client.post(URL, json=booking(venue["big"]["id"]))
+    assert names(created.json()) == expected
+    rid = created.json()["id"]
+
+    assert names((await client.get(f"{URL}/{rid}")).json()) == expected
+    assert names((await client.get(URL)).json()["items"][0]) == expected
+
+    moved = await client.patch(f"{URL}/{rid}", json={"start_at": "2030-06-10T20:00:00+02:00"})
+    assert names(moved.json()) == expected
+
+    cancelled = await client.post(f"{URL}/{rid}/cancel")
+    assert names(cancelled.json()) == expected

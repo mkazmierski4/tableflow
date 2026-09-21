@@ -1,10 +1,12 @@
+from collections.abc import Sequence
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import DuplicateTableError, InvalidRestaurantUpdateError, NotFoundError
 from src.models import DiningTable, Restaurant
-from src.schemas import RestaurantCreate, RestaurantUpdate, TableCreate
+from src.schemas import RestaurantCreate, RestaurantRead, RestaurantUpdate, TableCreate
 
 
 async def create_restaurant(session: AsyncSession, data: RestaurantCreate) -> Restaurant:
@@ -45,6 +47,25 @@ async def list_cities(session: AsyncSession) -> list[str]:
         select(Restaurant.city).where(Restaurant.city != "").distinct().order_by(Restaurant.city)
     )
     return list(result)
+
+
+async def to_read(session: AsyncSession, restaurants: Sequence[Restaurant]) -> list[RestaurantRead]:
+    """API models with the number of active tables, counted in one query for all of them."""
+    counts: dict[int, int] = {}
+    if restaurants:
+        rows = await session.execute(
+            select(DiningTable.restaurant_id, func.count())
+            .where(
+                DiningTable.restaurant_id.in_([r.id for r in restaurants]),
+                DiningTable.is_active.is_(True),
+            )
+            .group_by(DiningTable.restaurant_id)
+        )
+        counts = {restaurant_id: count for restaurant_id, count in rows}
+    return [
+        RestaurantRead.model_validate(r).model_copy(update={"table_count": counts.get(r.id, 0)})
+        for r in restaurants
+    ]
 
 
 async def update_restaurant(

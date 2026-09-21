@@ -84,6 +84,24 @@ class Reservation(TimestampMixin, Base):
 
     table: Mapped["DiningTable"] = relationship(back_populates="reservations")
 
+    # Read-only conveniences for API responses. They need `table.restaurant` to be loaded
+    # (async sessions cannot lazy-load), which the reservation service guarantees.
+    @property
+    def table_label(self) -> str:
+        return self.table.label
+
+    @property
+    def restaurant_id(self) -> int:
+        return self.table.restaurant_id
+
+    @property
+    def restaurant_name(self) -> str:
+        return self.table.restaurant.name
+
+    @property
+    def restaurant_timezone(self) -> str:
+        return self.table.restaurant.timezone
+
 
 # The exclusion constraint on (int, range) needs btree_gist for the `=` on table_id.
 event.listen(

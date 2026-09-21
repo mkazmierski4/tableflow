@@ -1,4 +1,10 @@
-from src.schemas.availability import AvailabilityQuery, AvailabilityRead
+from src.schemas.availability import (
+    AvailabilityQuery,
+    AvailabilityRead,
+    SlotRead,
+    SlotsQuery,
+    SlotsRead,
+)
 from src.schemas.common import Page, Pagination
 from src.schemas.reservation import (
     ReservationCreate,
@@ -26,6 +32,9 @@ __all__ = [
     "RestaurantCreate",
     "RestaurantRead",
     "RestaurantUpdate",
+    "SlotRead",
+    "SlotsQuery",
+    "SlotsRead",
     "TableCreate",
     "TableRead",
     "TableUpdate",

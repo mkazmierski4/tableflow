@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from src.api.deps import AdminUser, SessionDep
+from src.api.deps import AdminUser, SessionDep, SettingsDep
 from src.schemas import (
     AvailabilityQuery,
     AvailabilityRead,
@@ -11,6 +11,8 @@ from src.schemas import (
     RestaurantCreate,
     RestaurantRead,
     RestaurantUpdate,
+    SlotsQuery,
+    SlotsRead,
     TableCreate,
     TableRead,
 )
@@ -31,7 +33,7 @@ async def list_restaurants(
         session, limit=page.limit, offset=page.offset, city=city
     )
     return Page(
-        items=[RestaurantRead.model_validate(r) for r in items],
+        items=await restaurant_service.to_read(session, items),
         total=total,
         limit=page.limit,
         offset=page.offset,
@@ -49,13 +51,13 @@ async def create_restaurant(
     data: RestaurantCreate, session: SessionDep, _admin: AdminUser
 ) -> RestaurantRead:
     restaurant = await restaurant_service.create_restaurant(session, data)
-    return RestaurantRead.model_validate(restaurant)
+    return (await restaurant_service.to_read(session, [restaurant]))[0]
 
 
 @router.get("/{restaurant_id}", response_model=RestaurantRead)
 async def get_restaurant(restaurant_id: int, session: SessionDep) -> RestaurantRead:
     restaurant = await restaurant_service.get_restaurant(session, restaurant_id)
-    return RestaurantRead.model_validate(restaurant)
+    return (await restaurant_service.to_read(session, [restaurant]))[0]
 
 
 @router.patch("/{restaurant_id}", response_model=RestaurantRead)
@@ -63,7 +65,7 @@ async def update_restaurant(
     restaurant_id: int, data: RestaurantUpdate, session: SessionDep, _admin: AdminUser
 ) -> RestaurantRead:
     restaurant = await restaurant_service.update_restaurant(session, restaurant_id, data)
-    return RestaurantRead.model_validate(restaurant)
+    return (await restaurant_service.to_read(session, [restaurant]))[0]
 
 
 @router.post(
@@ -100,4 +102,21 @@ async def get_availability(
         end_at=end_at,
         party_size=query.party_size,
         tables=[TableRead.model_validate(t) for t in tables],
+    )
+
+
+@router.get("/{restaurant_id}/availability/slots", response_model=SlotsRead)
+async def get_slots(
+    restaurant_id: int,
+    query: Annotated[SlotsQuery, Query()],
+    session: SessionDep,
+    settings: SettingsDep,
+) -> SlotsRead:
+    """Start times for a day (every 30 minutes) with how many tables are free for the party."""
+    return await availability_service.list_slots(
+        session,
+        restaurant_id,
+        day=query.date,
+        party_size=query.party_size,
+        min_lead_time_minutes=settings.reservation_min_lead_time_minutes,
     )

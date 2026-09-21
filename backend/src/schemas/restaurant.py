@@ -92,4 +92,6 @@ class RestaurantRead(BaseModel):
     opens_at: time
     closes_at: time
     default_duration_minutes: int
+    # Active tables only; filled in by the service (not a column).
+    table_count: int = 0
     created_at: datetime

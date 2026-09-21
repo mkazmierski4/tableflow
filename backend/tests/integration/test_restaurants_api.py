@@ -230,6 +230,39 @@ class TestUpdate:
         assert fetched.json()["status"] == "confirmed"
 
 
+class TestTableCount:
+    async def test_counts_only_active_tables(
+        self, client: AsyncClient, admin: TestUser, venue: dict[str, Any]
+    ) -> None:
+        rid = venue["restaurant"]["id"]
+        assert (await client.get(f"{API}/restaurants/{rid}")).json()["table_count"] == 2
+
+        await client.delete(f"{API}/tables/{venue['small']['id']}", headers=admin.headers)
+
+        assert (await client.get(f"{API}/restaurants/{rid}")).json()["table_count"] == 1
+        listed = (await client.get(f"{API}/restaurants")).json()["items"]
+        assert [r["table_count"] for r in listed] == [1]
+
+    async def test_a_new_restaurant_has_none_and_the_list_counts_each_separately(
+        self, client: AsyncClient, admin: TestUser, venue: dict[str, Any]
+    ) -> None:
+        empty = await create_restaurant(client, headers=admin.headers, name="Zebra")
+        assert empty["table_count"] == 0
+
+        listed = (await client.get(f"{API}/restaurants")).json()["items"]
+        assert {r["name"]: r["table_count"] for r in listed} == {"Trattoria": 2, "Zebra": 0}
+
+    async def test_is_present_after_an_update(
+        self, client: AsyncClient, admin: TestUser, venue: dict[str, Any]
+    ) -> None:
+        response = await client.patch(
+            f"{API}/restaurants/{venue['restaurant']['id']}",
+            json={"name": "Renamed"},
+            headers=admin.headers,
+        )
+        assert response.json()["table_count"] == 2
+
+
 class TestTables:
     async def test_admin_adds_and_anyone_lists(
         self, client: AsyncClient, venue: dict[str, Any]

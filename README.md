@@ -113,13 +113,14 @@ Base path: `/api/v1`. Domain errors share one shape: `{"error": {"code": "slot_c
 | `GET` | `/restaurants?city=` | List restaurants (paginated), optionally filtered by city (case-insensitive) | public |
 | `GET` | `/restaurants/cities` | Cities that have restaurants, for filter pickers | public |
 | `POST` | `/restaurants` | Create a restaurant (`name`, `city`, `opens_at` / `closes_at`, IANA `timezone`) | admin |
-| `GET` | `/restaurants/{id}` | Restaurant details | public |
+| `GET` | `/restaurants/{id}` | Restaurant details, including `table_count` (active tables) | public |
 | `PATCH` | `/restaurants/{id}` | Partially update a restaurant | admin |
 | `GET` | `/restaurants/{id}/tables` | List tables | public |
 | `POST` | `/restaurants/{id}/tables` | Add a table (`label`, `capacity`) | admin |
 | `PATCH` | `/tables/{id}` | Change label, capacity or `is_active` | admin |
 | `DELETE` | `/tables/{id}` | Soft delete (deactivate) a table | admin |
 | `GET` | `/restaurants/{id}/availability?start_at&end_at&party_size` | Free tables for a slot, smallest fitting first | public |
+| `GET` | `/restaurants/{id}/availability/slots?date&party_size` | Start times for a day (every 30 min) with the number of free tables, honouring opening hours, lead time and daylight saving | public |
 | `POST` | `/reservations` | Create a reservation (anti-double-booking) | any user |
 | `GET` | `/reservations` | List, filtered by `restaurant_id`, `table_id`, `status`, `from`, `to` | scoped by role |
 | `GET` | `/reservations/{id}` | Reservation details | owner / staff of the venue / admin |
@@ -137,6 +138,7 @@ Interactive docs are served at `/docs` (Swagger UI) and `/redoc`.
 - `end_at` is optional and defaults to the restaurant's `default_duration_minutes`. When rescheduling, moving only `start_at` keeps the duration.
 - A reservation must fit within one local day's opening hours, evaluated in the restaurant's timezone. Changing the opening hours does not affect existing reservations.
 - Guests must book (and reschedule) at least `RESERVATION_MIN_LEAD_TIME_MINUTES` ahead.
+- Reservation responses name the table and the restaurant (`table_label`, `restaurant_name`, `restaurant_timezone`) so clients need no extra lookups.
 - New reservations are `confirmed` immediately. `guest_name` and `guest_email` default to the booking user's profile.
 - Only upcoming (`pending` / `confirmed`) reservations can be rescheduled.
 - A table with upcoming active reservations cannot be deactivated, and its capacity cannot be reduced below an upcoming party. These changes take the same per-table lock as bookings.

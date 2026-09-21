@@ -305,6 +305,18 @@
             "title": "Party Size",
             "type": "integer"
           },
+          "restaurant_id": {
+            "title": "Restaurant Id",
+            "type": "integer"
+          },
+          "restaurant_name": {
+            "title": "Restaurant Name",
+            "type": "string"
+          },
+          "restaurant_timezone": {
+            "title": "Restaurant Timezone",
+            "type": "string"
+          },
           "start_at": {
             "format": "date-time",
             "title": "Start At",
@@ -316,6 +328,10 @@
           "table_id": {
             "title": "Table Id",
             "type": "integer"
+          },
+          "table_label": {
+            "title": "Table Label",
+            "type": "string"
           },
           "user_id": {
             "anyOf": [
@@ -332,6 +348,10 @@
         "required": [
           "id",
           "table_id",
+          "table_label",
+          "restaurant_id",
+          "restaurant_name",
+          "restaurant_timezone",
           "user_id",
           "start_at",
           "end_at",
@@ -516,6 +536,11 @@
             "title": "Opens At",
             "type": "string"
           },
+          "table_count": {
+            "default": 0,
+            "title": "Table Count",
+            "type": "integer"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "string"
@@ -613,6 +638,78 @@
           }
         },
         "title": "RestaurantUpdate",
+        "type": "object"
+      },
+      "SlotRead": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "free_tables": {
+            "title": "Free Tables",
+            "type": "integer"
+          },
+          "local_time": {
+            "title": "Local Time",
+            "type": "string"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_at",
+          "end_at",
+          "local_time",
+          "available",
+          "free_tables"
+        ],
+        "title": "SlotRead",
+        "type": "object"
+      },
+      "SlotsRead": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "duration_minutes": {
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "party_size": {
+            "title": "Party Size",
+            "type": "integer"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/SlotRead"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "timezone",
+          "duration_minutes",
+          "party_size",
+          "slots"
+        ],
+        "title": "SlotsRead",
         "type": "object"
       },
       "TableCreate": {
@@ -1763,6 +1860,70 @@
           }
         },
         "summary": "Get Availability",
+        "tags": [
+          "restaurants"
+        ]
+      }
+    },
+    "/api/v1/restaurants/{restaurant_id}/availability/slots": {
+      "get": {
+        "description": "Start times for a day (every 30 minutes) with how many tables are free for the party.",
+        "operationId": "get_slots_api_v1_restaurants__restaurant_id__availability_slots_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "restaurant_id",
+            "required": true,
+            "schema": {
+              "title": "Restaurant Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "party_size",
+            "required": true,
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Party Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Slots",
         "tags": [
           "restaurants"
         ]

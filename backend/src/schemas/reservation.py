@@ -85,6 +85,10 @@ class ReservationRead(BaseModel):
 
     id: int
     table_id: int
+    table_label: str
+    restaurant_id: int
+    restaurant_name: str
+    restaurant_timezone: str
     user_id: int | None
     start_at: datetime
     end_at: datetime

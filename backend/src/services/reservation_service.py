@@ -4,6 +4,8 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+from sqlalchemy.orm.attributes import set_committed_value
+from sqlalchemy.sql.base import ExecutableOption
 
 from src.core.exceptions import (
     CapacityExceededError,
@@ -146,6 +148,7 @@ async def create_reservation(
         )
         session.add(reservation)
         await session.commit()
+        set_committed_value(reservation, "table", table)  # for the response; no backref events
         return reservation
     except IntegrityError as exc:
         await session.rollback()
@@ -160,12 +163,15 @@ async def create_reservation(
 # --- read --------------------------------------------------------------------------------
 
 
+def _with_venue() -> ExecutableOption:
+    """Eager-load what `ReservationRead` needs: the table and its restaurant."""
+    return joinedload(Reservation.table).joinedload(DiningTable.restaurant)
+
+
 async def get_reservation(session: AsyncSession, user: User, reservation_id: int) -> Reservation:
     """Load a reservation the user may see; anything else is reported as not found."""
     reservation = await session.scalar(
-        select(Reservation)
-        .options(joinedload(Reservation.table))
-        .where(Reservation.id == reservation_id)
+        select(Reservation).options(_with_venue()).where(Reservation.id == reservation_id)
     )
     if reservation is None or not can_access_reservation(user, reservation):
         raise NotFoundError(f"Reservation {reservation_id} not found")
@@ -202,7 +208,8 @@ async def list_reservations(
         or 0
     )
     result = await session.scalars(
-        base.where(*conditions)
+        base.options(_with_venue())
+        .where(*conditions)
         .order_by(Reservation.start_at, Reservation.id)
         .limit(limit)
         .offset(offset)
@@ -324,6 +331,7 @@ async def update_reservation(
         if "notes" in data.model_fields_set:
             reservation.notes = data.notes
         await session.commit()
+        set_committed_value(reservation, "table", table)
         return reservation
     except IntegrityError as exc:
         await session.rollback()
