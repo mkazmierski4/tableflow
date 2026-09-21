@@ -41,6 +41,9 @@ EXCLUSION_CONSTRAINT = "no_overlapping_reservations"
 
 # --- shared validation -------------------------------------------------------------------
 
+# How far back staff may start a reservation (a party that is already at the table).
+STAFF_BACKDATE = timedelta(minutes=60)
+
 
 def _ensure_lead_time(start_at: datetime, *, now: datetime, minutes: int) -> None:
     if start_at < now + timedelta(minutes=minutes):
@@ -129,7 +132,14 @@ async def create_reservation(
             table.restaurant.default_duration_minutes,
         )
 
-        _ensure_lead_time(start_at, now=now, minutes=min_lead_time_minutes)
+        if user.role == UserRole.GUEST:
+            _ensure_lead_time(start_at, now=now, minutes=min_lead_time_minutes)
+        elif start_at < now - STAFF_BACKDATE:
+            # Staff record walk-ins that have already sat down, so a short look-back is fine.
+            raise ReservationInPastError(
+                f"Reservations cannot start more than {STAFF_BACKDATE // timedelta(minutes=1)} "
+                "minutes in the past"
+            )
         _ensure_capacity(table, data.party_size)
         _ensure_within_opening_hours(table, start_at, end_at)
         await _ensure_slot_free(session, table, start_at, end_at)
