@@ -1,12 +1,13 @@
 # TableFlow
 
 [![Backend CI](https://github.com/mkazmierski4/tableflow/actions/workflows/backend.yml/badge.svg)](https://github.com/mkazmierski4/tableflow/actions/workflows/backend.yml)
+[![Frontend CI](https://github.com/mkazmierski4/tableflow/actions/workflows/frontend.yml/badge.svg)](https://github.com/mkazmierski4/tableflow/actions/workflows/frontend.yml)
 
 **Modern Restaurant Reservation & Table Management System**
 
 An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via Expo) that lets guests book a table in seconds and gives restaurant staff a live view of the floor — with **guaranteed protection against double-booking**.
 
-> **Status:** Phase 2 – the backend is feature-complete: JWT authentication with guest/staff/admin roles, restaurant and table management, reservations with anti-double-booking, rescheduling and a staff status lifecycle. The Expo frontend is next (see [Roadmap](#roadmap)).
+> **Status:** Phase 3 – the backend is feature-complete (JWT auth with guest/staff/admin roles, restaurants and tables, reservations with anti-double-booking, rescheduling, staff status lifecycle). The Expo app has its design system, navigation, theming and API layer, with working sign-in and restaurant discovery (search, city filter, open now). Booking and the staff floor plan are next (see [Roadmap](#roadmap)).
 
 ---
 
@@ -25,9 +26,9 @@ An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via
 - **Backend:** Python 3.11+, FastAPI, Pydantic v2, async SQLAlchemy 2.0, Alembic, Pytest
 - **Auth:** JWT (PyJWT) with argon2id password hashing (pwdlib), role-based access control
 - **Database:** SQLite (development), PostgreSQL 16 (Docker / production)
-- **Frontend:** React Native + Expo (Expo Router), TypeScript, NativeWind
+- **Frontend:** React Native + Expo SDK 57 (Expo Router), TypeScript, NativeWind, TanStack Query; types generated from the API's OpenAPI schema
 - **UI/UX:** React Native Reanimated, Moti, Gesture Handler; dark-slate design with light/dark mode
-- **Tooling:** Docker Compose, GitHub Actions CI (Ruff, mypy, Pytest on SQLite and PostgreSQL), Conventional Commits
+- **Tooling:** Docker Compose, GitHub Actions CI (backend: Ruff, mypy, Pytest on SQLite and PostgreSQL; frontend: tsc, ESLint, Jest, web build), Conventional Commits
 
 ## Architecture
 
@@ -185,7 +186,10 @@ pytest                          # SQLite; set TEST_POSTGRES_URL to also run agai
 cd frontend
 npm install
 npx expo start                  # press w for web, i for iOS, a for Android
+npm test                        # Jest + React Native Testing Library
 ```
+
+Run the backend first (`http://localhost:8000`). See [`frontend/README.md`](frontend/README.md) for device setups, commands and conventions.
 
 ### Docker (backend + PostgreSQL)
 
@@ -193,14 +197,13 @@ npx expo start                  # press w for web, i for iOS, a for Android
 docker compose up --build       # applies migrations, then serves http://localhost:8000
 ```
 
-> The frontend lands in Phase 3; its commands describe the target workflow.
 
 ## Roadmap
 
 - [x] **Phase 0** – Project structure and documentation
 - [x] **Phase 1** – FastAPI + database setup, reservation validation and anti-double-booking
 - [x] **Phase 2** – Authentication (JWT), restaurants and tables management
-- [ ] **Phase 3** – Expo + NativeWind app shell, navigation, theming
+- [x] **Phase 3** – Expo + NativeWind app shell, navigation, theming, API layer
 - [ ] **Phase 4** – Floor plan, booking flow, Reanimated/Moti animations
 - [ ] **Phase 5** – Keyboard shortcuts, polish, frontend CI, deployment
 

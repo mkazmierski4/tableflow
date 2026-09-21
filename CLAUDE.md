@@ -38,8 +38,13 @@ Projekt portfolio publikowany na GitHub – jakość kodu, historia commitów i 
 
 ## Wytyczne – Frontend (`frontend/`)
 
-- Expo (SDK aktualne) + **Expo Router** (file-based routing), TypeScript `strict: true`, bez `any`.
-- **NativeWind** (Tailwind) do stylowania; tokeny kolorów w `tailwind.config.js`; dark-slate design + tryb light/dark.
+- Expo (SDK 57) + **Expo Router** (file-based routing, trasy w `src/app` są cienkie – tylko renderują ekran z `features/`), TypeScript `strict: true`, bez `any`.
+- **NativeWind v4** (Tailwind 3) do stylowania; kolory to zmienne CSS (`src/theme/tokens.ts`), klasy typu `bg-surface` / `text-fg` – nigdy kolory na sztywno. Motyw = podmiana zmiennych, bez wariantów `dark:`.
+  Kolory z `tailwind.config.js` muszą odpowiadać planszy „Foundations” z zatwierdzonego designu; kontrast par tekst/tło jest testowany.
+- **Tekst** tylko przez `AppText`: wariant odpowiada za rozmiar i font, `tone` za kolor. Nie nadpisujemy ich przez `className` (NativeWind nie rozstrzyga konfliktów wg kolejności klas) – brakujący wariant dodajemy.
+- **Modal renderuje się poza korzeniem motywu** (portal na webie) – jego zawartość musi dostać zmienne motywu (jak w `BottomSheet`), inaczej klasy kolorów nic nie znaczą.
+- **Kontrakt API**: backend eksportuje `backend/openapi.json`, frontend generuje z niego `src/lib/api/schema.ts` (`npm run api:types`). Zmiana API = regeneracja obu; CI to sprawdza.
+- **Testy**: Jest + React Native Testing Library (v13, synchroniczne API), zachowanie przez role i etykiety, API mockowane na `@/lib/api`. Zmiany w wyglądzie weryfikujemy też w przeglądarce (zrzuty), bo testy jednostkowe nie zobaczą np. problemów z portalami.
 - **Animacje**: React Native Reanimated + Moti (przejścia stanów stolika, otwieranie formularzy, potwierdzenia), Gesture Handler (gesty, bottom sheet).
 - **Web**: skróty klawiszowe (np. `N` – nowa rezerwacja, `/` – szukaj, `Esc` – zamknij), focus states, dobre odstępy.
 - Komponenty małe i typowane; logika w hookach (`hooks/`), wywołania API w `lib/api/`, brak `fetch` w komponentach.
@@ -63,19 +68,26 @@ mypy src                          # typy
 alembic upgrade head              # migracje
 alembic check                     # czy modele są zgodne z migracjami
 python -m src.cli create-admin --email you@example.com --name "You"   # pierwszy admin (hasło: prompt lub TABLEFLOW_ADMIN_PASSWORD)
+python -m src.cli export-openapi   # odśwież backend/openapi.json po zmianie API (potem: npm run api:types we frontendzie)
 ```
 
 ### CI
 `.github/workflows/backend.yml`: ruff, mypy, migracje + `alembic check` na PostgreSQL oraz pytest na SQLite i PostgreSQL (Python 3.11 i 3.13), plus build obrazu Docker.
+`.github/workflows/frontend.yml`: build web (Metro), `tsc`, ESLint, Prettier, Jest oraz sprawdzenie, że wygenerowane typy API zgadzają się z `backend/openapi.json`.
 
 ### Frontend
 ```bash
 cd frontend
 npm install
+cp .env.example .env              # EXPO_PUBLIC_API_URL (opcjonalnie)
 npx expo start                    # dev server (i/a/w – iOS/Android/Web)
 npx expo start --web              # tylko Web
-npx tsc --noEmit                  # typy
-npm run lint
+npm run typecheck                 # tsc --noEmit
+npx eslint .                      # lint
+npm run format:check              # prettier
+npm test                          # Jest
+npm run api:types                 # typy z ../backend/openapi.json
+npx expo export --platform web    # build produkcyjny web
 ```
 
 ### Docker
@@ -95,10 +107,12 @@ tableflow/
 ├── docker-compose.yml
 ├── .github/
 │   └── workflows/
-│       └── backend.yml              # CI: ruff, mypy, migracje, pytest (SQLite + PostgreSQL)
+│       ├── backend.yml              # CI: ruff, mypy, migracje, pytest (SQLite + PostgreSQL)
+│       └── frontend.yml             # CI: build web, tsc, ESLint, Prettier, Jest, zgodność typów API
 ├── backend/
 │   ├── .env.example
 │   ├── requirements.txt
+│   ├── openapi.json                 # kontrakt API (python -m src.cli export-openapi) → typy frontendu
 │   ├── pyproject.toml               # ruff, mypy, pytest
 │   ├── Dockerfile
 │   ├── alembic.ini
@@ -106,7 +120,7 @@ tableflow/
 │   │   └── versions/                # 0001 schemat + exclusion constraint (PG), 0002 users + user_id, 0003 restaurant city
 │   ├── src/
 │   │   ├── main.py                  # app factory, lifespan, CORS
-│   │   ├── cli.py                   # python -m src.cli create-admin
+│   │   ├── cli.py                   # python -m src.cli create-admin | export-openapi
 │   │   ├── api/
 │   │   │   ├── deps.py              # SessionDep, CurrentUser, AdminUser, StaffUser
 │   │   │   ├── errors.py            # wyjątki domenowe → HTTP
@@ -151,39 +165,48 @@ tableflow/
 │       ├── unit/                    # scheduling, schematy, security, maszyna stanów
 │       └── integration/             # API, uprawnienia, współbieżność (test_double_booking.py …)
 └── frontend/
-    ├── app/                         # Expo Router
-    │   ├── _layout.tsx
-    │   ├── (tabs)/
-    │   │   ├── index.tsx            # plan sali / stoliki
-    │   │   ├── reservations.tsx
-    │   │   └── settings.tsx
-    │   └── reservation/
-    │       ├── new.tsx
-    │       └── [id].tsx
-    ├── src/
-    │   ├── components/              # ui/, floor-plan/, reservation/
-    │   ├── hooks/
-    │   ├── lib/
-    │   │   └── api/                 # klient REST + typy
-    │   ├── theme/                   # tokeny, dark/light
-    │   └── types/
+    ├── package.json
+    ├── app.json                      # Expo: nazwa, schemat, pluginy, typed routes, React Compiler
+    ├── tsconfig.json                 # strict, alias @/* → src/*
+    ├── babel.config.js               # NativeWind (jsxImportSource)
+    ├── metro.config.js               # NativeWind + global.css
+    ├── tailwind.config.js            # tokeny jako zmienne CSS, fonty, promienie
+    ├── eslint.config.js
+    ├── .prettierrc.json              # + sortowanie klas Tailwind
+    ├── jest.config.js
+    ├── jest.setup.ts                 # mocki: async-storage, secure-store, worklets, reanimated
+    ├── .env.example                  # EXPO_PUBLIC_API_URL
     ├── assets/
-    ├── global.css                   # NativeWind
-    ├── tailwind.config.js
-    ├── babel.config.js
-    ├── metro.config.js
-    ├── app.json
-    ├── tsconfig.json
-    └── package.json
+    └── src/
+        ├── global.css                # wejście Tailwind (NativeWind)
+        ├── test-utils.tsx            # renderWithProviders, fabryki danych
+        ├── app/                      # Expo Router – cienkie trasy
+        │   ├── _layout.tsx           # providery, fonty, splash, bramki (Stack.Protected)
+        │   ├── +html.tsx             # HTML dla statycznego webu (tło bez „flasha”)
+        │   ├── +not-found.tsx
+        │   ├── (tabs)/               # gość: index (Explore), reservations, profile
+        │   ├── (auth)/sign-in.tsx    # modal, tylko gdy niezalogowany
+        │   ├── (staff)/              # tylko staff/admin (Faza 4: today, floor)
+        │   └── restaurant/[id].tsx
+        ├── features/                 # ekrany i logika per domena
+        │   ├── auth/                 # AuthProvider, SignInScreen, ProfileScreen, ReservationsScreen
+        │   └── restaurants/          # ExploreScreen (+ filtr miasta), RestaurantScreen, hooki, godziny otwarcia
+        ├── components/ui/            # design system: AppText, Button, Input, FilterChip, Badge, StatusChip,
+        │                             #   Card, SegmentedControl, BottomSheet, TableTile, EmptyState, Screen, Icon
+        ├── theme/                    # tokens.ts (paleta + zmienne CSS), ThemeProvider (system/dark/light)
+        └── lib/
+            ├── api/                  # client.ts (błędy, token), index.ts (endpointy), schema.ts (generowany)
+            ├── token-storage.ts      # keychain (natywnie) / localStorage (web)
+            └── cn.ts
 ```
 
-> Pozycje oznaczone jako „Faza N” oraz cały `frontend/` to struktura docelowa – pliki powstają iteracyjnie.
+> Pozycje oznaczone jako „Faza N” to struktura docelowa – pliki powstają iteracyjnie.
 
 ## Roadmapa faz
 
 0. **Inicjalizacja architektury** (dokumentacja, struktura, git) ✅
 1. Setup FastAPI + baza + walidacja rezerwacji i anti-overbooking ✅
 2. Auth (JWT) + zarządzanie restauracjami, stolikami i statusami rezerwacji + CI ✅
-3. Inicjalizacja Expo + NativeWind + nawigacja + motyw
+3. Inicjalizacja Expo + NativeWind + nawigacja + motyw + warstwa API ✅
 4. Plan sali, rezerwacje, animacje (Reanimated/Moti)
 5. Polish, skróty klawiszowe, CI, deployment
