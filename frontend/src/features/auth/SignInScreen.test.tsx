@@ -67,6 +67,24 @@ describe('signing in', () => {
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(expected));
   });
 
+  it.each(['staff', 'admin'] as const)(
+    'ignores a customer `next` for %s and lets the tabs layout route them',
+    async (role) => {
+      mockParams = { next: '/restaurant/7' };
+      mockedAuth.login.mockResolvedValue({ access_token: 'tok', token_type: 'bearer' });
+      mockedAuth.me.mockResolvedValue(
+        makeUser({ role, restaurant_id: role === 'staff' ? 1 : null }),
+      );
+      await renderScreen();
+
+      fill('Email', 'sam@example.com');
+      fill('Password', 'secret-pass');
+      fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
+
+      await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    },
+  );
+
   it('signs in, stores the session and leaves the screen', async () => {
     mockedAuth.login.mockResolvedValue({ access_token: 'tok', token_type: 'bearer' });
     mockedAuth.me.mockResolvedValue(makeUser());

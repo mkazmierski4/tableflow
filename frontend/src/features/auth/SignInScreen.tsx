@@ -64,9 +64,14 @@ export function SignInScreen() {
 
     setSubmitting(true);
     try {
-      if (mode === 'signIn') await signIn(email, password);
-      else await signUp({ email, password, full_name: fullName.trim() });
-      router.replace(returnTo);
+      const user =
+        mode === 'signIn'
+          ? await signIn(email, password)
+          : await signUp({ email, password, full_name: fullName.trim() });
+      // Staff never land on a customer screen, even if `next` pointed at one (e.g. a booking
+      // link followed before switching accounts): the tabs layout sends them to the console.
+      const isStaffUser = user.role === 'staff' || user.role === 'admin';
+      router.replace(isStaffUser ? '/' : returnTo);
     } catch (error) {
       if (error instanceof ApiError) {
         setErrors(error.fieldErrors);

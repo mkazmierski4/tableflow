@@ -18,10 +18,11 @@ export type AuthState =
 type AuthContextValue = {
   state: AuthState;
   user: User | null;
-  /** Staff and admins get the staff area on top of the guest tabs. */
+  /** Staff and admins get the staff console instead of the guest tabs. */
   isStaff: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (input: RegisterInput) => Promise<void>;
+  /** Resolves with the signed-in user, so a caller can route by role right away. */
+  signIn: (email: string, password: string) => Promise<User>;
+  signUp: (input: RegisterInput) => Promise<User>;
   signOut: () => Promise<void>;
 };
 
@@ -68,12 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await tokenStorage.set(access_token);
     const user = await authApi.me();
     setState({ status: 'signedIn', user });
+    return user;
   }, []);
 
   const signUp = useCallback(
     async (input: RegisterInput) => {
       await authApi.register({ ...input, email: input.email.trim() });
-      await signIn(input.email, input.password);
+      return signIn(input.email, input.password);
     },
     [signIn],
   );
