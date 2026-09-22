@@ -1,4 +1,4 @@
-import { useRouter, type Href } from 'expo-router';
+import { useRouter, usePathname, type Href } from 'expo-router';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 
 import { AppText, Icon, type IconName } from '@/components/ui';
@@ -11,17 +11,20 @@ export function useIsWide(): boolean {
   return useWindowDimensions().width >= WIDE_BREAKPOINT;
 }
 
-type Section = 'floor' | 'today';
-
-const ITEMS: { key: Section | 'profile'; label: string; icon: IconName; href: Href }[] = [
-  { key: 'today', label: 'Today', icon: 'list', href: '/today' },
-  { key: 'floor', label: 'Floor', icon: 'grid', href: '/floor' },
-  { key: 'profile', label: 'Profile', icon: 'user', href: '/profile' },
+const ITEMS: { label: string; icon: IconName; href: Href }[] = [
+  { label: 'Today', icon: 'list', href: '/today' },
+  { label: 'Floor', icon: 'grid', href: '/floor' },
+  { label: 'Account', icon: 'user', href: '/account' },
 ];
 
-/** Side rail on wide screens, tab bar on phones. */
-export function StaffNav({ active }: { active: Section }) {
+/**
+ * The console's persistent chrome: a side rail on wide screens, a bottom tab bar on phones.
+ * Rendered once, in `(staff)/_layout.tsx`, around the routed content — never inside a screen —
+ * so switching between Today, Floor and Account never remounts it.
+ */
+export function StaffNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const wide = useIsWide();
 
   return (
@@ -36,16 +39,14 @@ export function StaffNav({ active }: { active: Section }) {
       )}
     >
       {ITEMS.map((item) => {
-        const current = item.key === active;
+        const current = pathname.startsWith(item.href as string);
         return (
           <Pressable
-            key={item.key}
+            key={item.href as string}
             accessibilityRole="tab"
             accessibilityLabel={item.label}
             aria-selected={current}
-            onPress={() =>
-              item.key === 'profile' ? router.navigate(item.href) : router.replace(item.href)
-            }
+            onPress={() => router.replace(item.href)}
             className={cn(
               'items-center justify-center rounded-2xl',
               wide ? 'h-12 w-12' : 'h-14 flex-1 gap-0.5',

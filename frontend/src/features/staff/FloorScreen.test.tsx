@@ -162,6 +162,34 @@ describe('the floor plan', () => {
     expect(restaurants.tables).toHaveBeenCalledWith(7, expect.anything());
   });
 
+  it("summarises the day's shape", async () => {
+    await renderFloor();
+    await tile('T1');
+
+    // kim (confirmed), lis (seated), wilk (pending) all fall on this local day; wilk hasn't
+    // started at 17:00 so only T3 (lis) is occupied, leaving the other 4 active tables free.
+    await waitFor(() => expect(screen.getByTestId('stat-total')).toHaveTextContent(/^3/));
+    expect(screen.getByTestId('stat-pending')).toHaveTextContent(/^1/);
+    expect(screen.getByTestId('stat-seated')).toHaveTextContent(/^1/);
+    expect(screen.getByTestId('stat-free')).toHaveTextContent(/^4/);
+  });
+
+  it('filters the plan by table size', async () => {
+    await renderFloor();
+    await tile('T1');
+
+    fireEvent.press(screen.getByTestId('capacity-2'));
+
+    expect(screen.getByTestId('tile-T2')).toBeTruthy();
+    expect(screen.getByTestId('tile-T3')).toBeTruthy();
+    expect(screen.queryByTestId('tile-T1')).toBeNull();
+    expect(screen.queryByTestId('tile-T4')).toBeNull();
+    expect(screen.queryByTestId('tile-T6')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('capacity-all'));
+    expect(await tile('T1')).toBeTruthy();
+  });
+
   it('asks for the reservations of the local day', async () => {
     await renderFloor();
     await tile('T1');

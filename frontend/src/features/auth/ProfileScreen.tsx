@@ -21,14 +21,19 @@ const THEMES = [
   { value: 'light', label: 'Light' },
 ] as const satisfies readonly { value: ThemePreference; label: string }[];
 
-export function ProfileScreen() {
+type ProfileScreenProps = {
+  /** Rendered inside the staff console shell, which already claims the safe area and nav. */
+  embedded?: boolean;
+};
+
+export function ProfileScreen({ embedded = false }: ProfileScreenProps) {
   const router = useRouter();
   const wide = useIsWide();
   const { user, isStaff, signOut } = useAuth();
   const { preference, setPreference } = useTheme();
 
   return (
-    <Screen>
+    <Screen topInset={!embedded}>
       <AppText variant="display" accessibilityRole="header">
         Profile
       </AppText>
@@ -63,7 +68,7 @@ export function ProfileScreen() {
         />
       </Card>
 
-      {isStaff ? (
+      {isStaff && !embedded ? (
         <Button
           label="Open staff console"
           variant="secondary"

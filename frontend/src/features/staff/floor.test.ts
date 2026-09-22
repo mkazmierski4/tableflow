@@ -2,6 +2,8 @@ import { makeReservation, makeTable } from '@/test-utils';
 
 import {
   dayBounds,
+  dayStats,
+  distinctCapacities,
   floorAt,
   localDayKey,
   moveTargets,
@@ -217,5 +219,66 @@ describe('shortName', () => {
     expect(shortName('Ann Nowak')).toBe('Nowak');
     expect(shortName('Kim')).toBe('Kim');
     expect(shortName('  Jan  van  Dijk ')).toBe('Dijk');
+  });
+});
+
+describe('dayStats', () => {
+  const tables = [
+    makeTable({ id: 1, label: 'T1', capacity: 2 }),
+    makeTable({ id: 2, label: 'T2', capacity: 4 }),
+    makeTable({ id: 3, label: 'T3', capacity: 4 }),
+  ];
+  const at = (iso: string) => new Date(iso);
+
+  it('counts today, excluding cancelled, and the plan at the given moment', () => {
+    const reservations = [
+      makeReservation({
+        id: 1,
+        table_id: 1,
+        status: 'seated',
+        start_at: '2030-06-10T16:00:00Z',
+        end_at: '2030-06-10T17:30:00Z',
+      }),
+      makeReservation({
+        id: 2,
+        table_id: 2,
+        status: 'pending',
+        start_at: '2030-06-10T18:00:00Z',
+        end_at: '2030-06-10T19:30:00Z',
+      }),
+      makeReservation({ id: 3, table_id: 3, status: 'cancelled' }),
+    ];
+
+    const stats = dayStats(tables, reservations, at('2030-06-10T16:30:00Z'), NOW);
+
+    expect(stats).toEqual({
+      totalToday: 2,
+      awaitingConfirmation: 1,
+      seatedNow: 1,
+      freeNow: 2,
+      occupiedNow: 1,
+    });
+  });
+
+  it('is all free with nothing booked', () => {
+    expect(dayStats(tables, [], NOW, NOW)).toEqual({
+      totalToday: 0,
+      awaitingConfirmation: 0,
+      seatedNow: 0,
+      freeNow: 3,
+      occupiedNow: 0,
+    });
+  });
+});
+
+describe('distinctCapacities', () => {
+  it('lists active tables only, ascending, without duplicates', () => {
+    const tables = [
+      makeTable({ id: 1, capacity: 4 }),
+      makeTable({ id: 2, capacity: 2 }),
+      makeTable({ id: 3, capacity: 4 }),
+      makeTable({ id: 4, capacity: 6, is_active: false }),
+    ];
+    expect(distinctCapacities(tables)).toEqual([2, 4]);
   });
 });

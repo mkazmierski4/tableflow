@@ -88,4 +88,12 @@ describe('ProfileScreen', () => {
 
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Dark' })).toBeSelected());
   });
+
+  it('drops the redundant console button and its own top inset when embedded', async () => {
+    await signedInAs(makeUser({ role: 'staff', restaurant_id: 1 }));
+    await render(<ProfileScreen embedded />);
+
+    await screen.findByText('Ann Nowak');
+    expect(screen.queryByRole('button', { name: 'Open staff console' })).toBeNull();
+  });
 });

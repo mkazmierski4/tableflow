@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   AppText,
@@ -18,7 +17,9 @@ import { formatDateLong, formatTime, pluralGuests } from '@/features/reservation
 import { RescheduleSheet } from '@/features/reservations/RescheduleSheet';
 import { ApiError, type Reservation } from '@/lib/api';
 
+import { DayStatsBar } from './DayStats';
 import {
+  dayStats,
   localDayKey,
   moveTargets,
   shortName,
@@ -30,7 +31,6 @@ import { useChangeStatus, useDayReservations, useUpdateReservation, useVenue } f
 import { MovePanel } from './MovePanel';
 import { NewReservationSheet } from './NewReservationSheet';
 import { ReservationPanel } from './ReservationPanel';
-import { StaffNav } from './StaffNav';
 import { useStaffScope } from './StaffScope';
 import { useNow } from './useNow';
 
@@ -52,17 +52,15 @@ export function TodayScreen() {
   const { restaurantId, isAdmin } = useStaffScope();
   if (restaurantId === null) {
     return (
-      <SafeAreaView className="flex-1 bg-bg">
-        <EmptyState
-          icon="list"
-          title={isAdmin ? 'No restaurants yet' : 'No restaurant assigned'}
-          message={
-            isAdmin
-              ? 'Create a restaurant first, then its reservations appear here.'
-              : 'Ask an admin to assign your account to a restaurant.'
-          }
-        />
-      </SafeAreaView>
+      <EmptyState
+        icon="list"
+        title={isAdmin ? 'No restaurants yet' : 'No restaurant assigned'}
+        message={
+          isAdmin
+            ? 'Create a restaurant first, then its reservations appear here.'
+            : 'Ask an admin to assign your account to a restaurant.'
+        }
+      />
     );
   }
   return <TodayList key={restaurantId} restaurantId={restaurantId} />;
@@ -97,6 +95,7 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
     seated: all.filter((r) => inFilter(r, 'seated')).length,
   };
   const rows = all.filter((r) => inFilter(r, filter));
+  const stats = useMemo(() => dayStats(tables.data ?? [], all, now, now), [tables.data, all, now]);
 
   const opened = all.find((r) => r.id === openId) ?? null;
   const openedView: TableView | null = opened
@@ -137,7 +136,7 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
   const dayLabel = zone ? formatDateLong(`${dayKey}T12:00:00Z`, 'UTC') : '';
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-bg">
+    <View className="flex-1">
       <View className="flex-1 items-center">
         <View className="w-full max-w-[560px] flex-1 gap-4 px-5 pt-4">
           <View className="gap-0.5">
@@ -148,6 +147,8 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
               Today
             </AppText>
           </View>
+
+          <DayStatsBar stats={stats} />
 
           <View accessibilityRole="tablist" className="flex-row gap-2">
             {(['all', 'upcoming', 'seated'] as const).map((f) => (
@@ -203,12 +204,10 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
         accessibilityRole="button"
         accessibilityLabel="New reservation"
         onPress={() => setCreating(true)}
-        className="absolute bottom-24 right-5 h-14 w-14 items-center justify-center rounded-full bg-accent"
+        className="absolute bottom-6 right-5 h-14 w-14 items-center justify-center rounded-full bg-accent"
       >
         <Icon name="plus" size={26} color="on-accent" />
       </Pressable>
-
-      <StaffNav active="today" />
 
       <BottomSheet
         visible={openedView !== null}
@@ -289,7 +288,7 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
         zone={zone ?? 'UTC'}
         presetTableId={null}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -12,14 +12,26 @@ type ScreenProps = {
   refreshing?: boolean;
   onRefresh?: () => void;
   className?: string;
+  /** False when a parent (e.g. the staff console shell) already claims the top safe area. */
+  topInset?: boolean;
 };
 
 /** Page frame: safe areas, themed background, 20 px gutters, centred on wide web screens. */
-export function Screen({ children, scroll = true, refreshing, onRefresh, className }: ScreenProps) {
+export function Screen({
+  children,
+  scroll = true,
+  refreshing,
+  onRefresh,
+  className,
+  topInset = true,
+}: ScreenProps) {
   const { colors } = useTheme();
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-bg">
+    <SafeAreaView
+      edges={topInset ? ['top', 'left', 'right'] : ['left', 'right']}
+      className="flex-1 bg-bg"
+    >
       {scroll ? (
         <ScrollView
           className="flex-1"

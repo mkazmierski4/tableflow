@@ -127,6 +127,18 @@ describe('the list', () => {
     ).toBeTruthy();
   });
 
+  it("summarises the day's shape", async () => {
+    await renderToday();
+    await screen.findByTestId('row-2');
+
+    // wilk, nowak, lis and ola are active today; gone is cancelled and done is from an earlier
+    // slot. Only ola's table_id lines up with a mocked table, so she is the one counted as
+    // occupying it right now — the same table-by-id matching the floor plan itself relies on.
+    await waitFor(() => expect(screen.getByTestId('stat-total')).toHaveTextContent(/^4/));
+    expect(screen.getByTestId('stat-pending')).toHaveTextContent(/^1/);
+    expect(screen.getByTestId('stat-free')).toHaveTextContent(/^2/);
+  });
+
   it('counts and filters', async () => {
     await renderToday();
     await screen.findByTestId('row-2');

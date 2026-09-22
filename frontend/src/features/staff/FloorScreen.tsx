@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FloorPlan, type FloorTileModel } from '@/components/floor-plan/FloorPlan';
 import { TimeScrubber } from '@/components/floor-plan/TimeScrubber';
@@ -10,6 +9,7 @@ import {
   Button,
   ConfirmDialog,
   EmptyState,
+  FilterChip,
   Icon,
   type TileState,
 } from '@/components/ui';
@@ -18,7 +18,10 @@ import { RescheduleSheet } from '@/features/reservations/RescheduleSheet';
 import { ApiError, type Reservation } from '@/lib/api';
 import { useTheme } from '@/theme/ThemeProvider';
 
+import { DayStatsBar } from './DayStats';
 import {
+  dayStats,
+  distinctCapacities,
   floorAt,
   localDayKey,
   moveTargets,
@@ -33,7 +36,7 @@ import { useChangeStatus, useDayReservations, useUpdateReservation, useVenue } f
 import { MovePanel } from './MovePanel';
 import { NewReservationSheet } from './NewReservationSheet';
 import { ReservationPanel } from './ReservationPanel';
-import { StaffNav, useIsWide } from './StaffNav';
+import { useIsWide } from './StaffNav';
 import { useStaffScope } from './StaffScope';
 import { useHotkeys } from './useHotkeys';
 import { useNow } from './useNow';
@@ -55,17 +58,15 @@ export function FloorScreen() {
   const { restaurantId, isAdmin } = useStaffScope();
   if (restaurantId === null) {
     return (
-      <SafeAreaView className="flex-1 bg-bg">
-        <EmptyState
-          icon="grid"
-          title={isAdmin ? 'No restaurants yet' : 'No restaurant assigned'}
-          message={
-            isAdmin
-              ? 'Create a restaurant first, then its floor plan appears here.'
-              : 'Ask an admin to assign your account to a restaurant.'
-          }
-        />
-      </SafeAreaView>
+      <EmptyState
+        icon="grid"
+        title={isAdmin ? 'No restaurants yet' : 'No restaurant assigned'}
+        message={
+          isAdmin
+            ? 'Create a restaurant first, then its floor plan appears here.'
+            : 'Ask an admin to assign your account to a restaurant.'
+        }
+      />
     );
   }
   // Keyed, so switching restaurant starts from a clean selection and time.
@@ -92,6 +93,7 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
+  const [capacityFilter, setCapacityFilter] = useState<number | null>(null);
 
   const today = zone ? localDayKey(now, zone) : null;
   const dayKey = today ? shiftDay(today, dayOffset) : null;
@@ -117,6 +119,16 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
   const views = useMemo(
     () => floorAt(tables.data ?? [], reservations, at, now),
     [tables.data, reservations, at, now],
+  );
+  const capacities = useMemo(() => distinctCapacities(tables.data ?? []), [tables.data]);
+  const stats = useMemo(
+    () => dayStats(tables.data ?? [], reservations, at, now),
+    [tables.data, reservations, at, now],
+  );
+  const visibleViews = useMemo(
+    () =>
+      capacityFilter === null ? views : views.filter((v) => v.table.capacity === capacityFilter),
+    [views, capacityFilter],
   );
   const selected = views.find((v) => v.table.id === selectedId) ?? null;
   const targets = useMemo(
@@ -207,7 +219,7 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
     setQuery('');
   };
 
-  const tiles: FloorTileModel[] = views.map((v) => {
+  const tiles: FloorTileModel[] = visibleViews.map((v) => {
     const r = v.reservation;
     const isTarget = targets.some((t) => t.id === v.table.id);
     const inMove = mode === 'move';
@@ -366,8 +378,12 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
   ) : tiles.length === 0 ? (
     <EmptyState
       icon="grid"
-      title="No tables yet"
-      message="Add tables to this restaurant and they appear on the floor plan."
+      title={capacityFilter === null ? 'No tables yet' : 'No tables of that size'}
+      message={
+        capacityFilter === null
+          ? 'Add tables to this restaurant and they appear on the floor plan.'
+          : 'Clear the filter to see the rest of the floor.'
+      }
     />
   ) : (
     <FloorPlan tiles={tiles} onSelect={select} />
@@ -389,6 +405,31 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
     </View>
   );
 
+  const capacityFilterRow =
+    capacities.length > 1 ? (
+      <View
+        accessibilityRole="tablist"
+        accessibilityLabel="Filter tables"
+        className="flex-row flex-wrap gap-2 px-6 pt-3"
+      >
+        <FilterChip
+          testID="capacity-all"
+          label="All tables"
+          selected={capacityFilter === null}
+          onPress={() => setCapacityFilter(null)}
+        />
+        {capacities.map((c) => (
+          <FilterChip
+            key={c}
+            testID={`capacity-${c}`}
+            label={`Seats ${c}`}
+            selected={capacityFilter === c}
+            onPress={() => setCapacityFilter(c)}
+          />
+        ))}
+      </View>
+    ) : null;
+
   const scrubber =
     labels.length > 1 ? (
       <View className="px-6 pb-5 pt-2">
@@ -404,7 +445,12 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
   const main = (
     <View className="flex-1">
       {header}
+      <View className="px-6 pt-4">
+        <DayStatsBar stats={stats} />
+      </View>
+      <View className="mx-6 mt-4 h-px bg-line" />
       {legend}
+      {capacityFilterRow}
       <ScrollView className="flex-1" testID="floor-scroll">
         {floor}
       </ScrollView>
@@ -413,13 +459,9 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
   );
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-bg">
+    <>
       <View className={wide ? 'flex-1 flex-row' : 'flex-1'}>
-        {wide ? <StaffNav active="floor" /> : null}
-        <View className="flex-1">
-          {main}
-          {wide ? null : <StaffNav active="floor" />}
-        </View>
+        <View className="flex-1">{main}</View>
         {wide && panel ? (
           <View
             accessibilityLabel="Reservation details"
@@ -484,7 +526,7 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
         zone={zone ?? 'UTC'}
         presetTableId={selected && !selected.reservation ? selected.table.id : null}
       />
-    </SafeAreaView>
+    </>
   );
 }
 

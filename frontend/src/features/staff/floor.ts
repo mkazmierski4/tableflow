@@ -224,3 +224,38 @@ export function shortName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/);
   return parts[parts.length - 1] ?? fullName;
 }
+
+export type DayStats = {
+  /** Reservations today that still hold a table (excludes cancelled). */
+  totalToday: number;
+  awaitingConfirmation: number;
+  seatedNow: number;
+  freeNow: number;
+  occupiedNow: number;
+};
+
+/** A day's shape at a glance, for the console header. Pure aggregation over already-loaded data. */
+export function dayStats(
+  tables: readonly DiningTable[],
+  reservations: readonly Reservation[],
+  at: Date,
+  now: Date,
+): DayStats {
+  const today = reservations.filter(isActive);
+  const views = floorAt(tables, reservations, at, now);
+  return {
+    totalToday: today.length,
+    awaitingConfirmation: today.filter((r) => r.status === 'pending').length,
+    seatedNow: views.filter((v) => v.state === 'seated').length,
+    freeNow: views.filter((v) => v.state === 'free').length,
+    occupiedNow: views.filter((v) => v.state !== 'free').length,
+  };
+}
+
+/** Distinct table capacities, ascending — the console has no notion of "zones", so tables are
+ * grouped by size instead. */
+export function distinctCapacities(tables: readonly DiningTable[]): number[] {
+  return [...new Set(tables.filter((t) => t.is_active).map((t) => t.capacity))].sort(
+    (a, b) => a - b,
+  );
+}
