@@ -10,6 +10,7 @@ import {
   Screen,
   SegmentedControl,
 } from '@/components/ui';
+import { useIsWide } from '@/features/staff/StaffNav';
 import { useTheme, type ThemePreference } from '@/theme/ThemeProvider';
 
 import { useAuth } from './AuthProvider';
@@ -22,6 +23,7 @@ const THEMES = [
 
 export function ProfileScreen() {
   const router = useRouter();
+  const wide = useIsWide();
   const { user, isStaff, signOut } = useAuth();
   const { preference, setPreference } = useTheme();
 
@@ -66,7 +68,7 @@ export function ProfileScreen() {
           label="Open staff console"
           variant="secondary"
           icon="grid"
-          onPress={() => router.push('/today')}
+          onPress={() => router.push(wide ? '/floor' : '/today')}
         />
       ) : null}
       {user ? (

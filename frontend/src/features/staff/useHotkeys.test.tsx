@@ -1,0 +1,106 @@
+import { render } from '@testing-library/react-native';
+import { Platform, Text } from 'react-native';
+
+import { useHotkeys, type HotkeyMap } from './useHotkeys';
+
+type Listener = (event: Partial<KeyboardEvent>) => void;
+let listener: Listener | null = null;
+
+function Harness({ keys, enabled = true }: { keys: HotkeyMap; enabled?: boolean }) {
+  useHotkeys(keys, enabled);
+  return <Text>host</Text>;
+}
+
+const press = (key: string, extra: Partial<KeyboardEvent> = {}) => {
+  const event = { key, preventDefault: jest.fn(), target: null, ...extra };
+  listener?.(event);
+  return event;
+};
+
+describe('useHotkeys', () => {
+  const originalOS = Platform.OS;
+
+  beforeEach(() => {
+    listener = null;
+    Platform.OS = 'web';
+    (globalThis as { window?: unknown }).window = {
+      addEventListener: (_: string, fn: Listener) => (listener = fn),
+      removeEventListener: () => (listener = null),
+    };
+  });
+  afterEach(() => {
+    // The stub stays: Testing Library unmounts after this hook and the cleanup still needs it.
+    Platform.OS = originalOS;
+  });
+
+  it('runs the handler of a key, ignoring letter case', () => {
+    const n = jest.fn();
+    render(<Harness keys={{ n }} />);
+
+    const event = press('N');
+    press('n');
+
+    expect(n).toHaveBeenCalledTimes(2);
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it('matches named keys exactly', () => {
+    const left = jest.fn();
+    const esc = jest.fn();
+    render(<Harness keys={{ ArrowLeft: left, Escape: esc }} />);
+
+    press('ArrowLeft');
+    press('Escape');
+    press('ArrowRight');
+
+    expect(left).toHaveBeenCalledTimes(1);
+    expect(esc).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves keys without a handler alone', () => {
+    render(<Harness keys={{ n: jest.fn() }} />);
+    expect(press('x').preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('does not steal browser and system shortcuts', () => {
+    const n = jest.fn();
+    render(<Harness keys={{ n }} />);
+
+    press('n', { ctrlKey: true });
+    press('n', { metaKey: true });
+    press('n', { altKey: true });
+    press('n', { repeat: true });
+
+    expect(n).not.toHaveBeenCalled();
+  });
+
+  it('is off when disabled', () => {
+    render(<Harness keys={{ n: jest.fn() }} enabled={false} />);
+    expect(listener).toBeNull();
+  });
+
+  it('always uses the latest handlers', () => {
+    const first = jest.fn();
+    const second = jest.fn();
+    const view = render(<Harness keys={{ n: first }} />);
+    view.rerender(<Harness keys={{ n: second }} />);
+
+    press('n');
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing on native', () => {
+    Platform.OS = 'ios';
+    render(<Harness keys={{ n: jest.fn() }} />);
+    expect(listener).toBeNull();
+  });
+
+  it('stops listening when unmounted', () => {
+    const view = render(<Harness keys={{ n: jest.fn() }} />);
+    expect(listener).not.toBeNull();
+    view.unmount();
+    expect(listener).toBeNull();
+  });
+});
