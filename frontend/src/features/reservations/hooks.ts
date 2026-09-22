@@ -59,7 +59,7 @@ export function useReservation(id: number, initial?: Reservation) {
 }
 
 /** Anything that changes a table's occupancy also invalidates what guests see as free. */
-function useRefreshBookings() {
+export function useRefreshBookings() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([

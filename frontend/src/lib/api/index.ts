@@ -81,6 +81,10 @@ export const restaurantApi = {
 export type ReservationListParams = {
   status?: ReservationStatus;
   restaurant_id?: number;
+  table_id?: number;
+  /** Bounds of `start_at`: `[from, to)`, ISO instants. */
+  from?: string;
+  to?: string;
   limit?: number;
   offset?: number;
 };
@@ -101,4 +105,7 @@ export const reservationApi = {
   update: (id: number, body: ReservationUpdate) =>
     api.request<Reservation>('PATCH', `${API}/reservations/${id}`, { json: body }),
   cancel: (id: number) => api.request<Reservation>('POST', `${API}/reservations/${id}/cancel`),
+  /** Staff lifecycle change: confirm, seat, complete, no-show, cancel. */
+  setStatus: (id: number, status: ReservationStatus) =>
+    api.request<Reservation>('PATCH', `${API}/reservations/${id}/status`, { json: { status } }),
 };
