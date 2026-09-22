@@ -52,10 +52,14 @@ Projekt portfolio publikowany na GitHub – jakość kodu, historia commitów i 
 - Dostępność: `accessibilityLabel`, kontrast, obsługa `prefers-reduced-motion`.
   Stany kontrolek przez `aria-selected` / `aria-checked` / `aria-disabled` / `aria-busy` – react-native-web nie mapuje `accessibilityState` na DOM.
 - Nie zagnieżdżamy przycisków (Pressable w Pressable to nieprawidłowy HTML na webie): karta = pressable z podsumowaniem + rodzeństwo z akcjami.
-- Logowanie z innego ekranu: `/sign-in?next=<ścieżka>`; honorujemy tylko ścieżki zaczynające się od pojedynczego `/`. Bramka `Stack.Protected` sama odsyła na `/`.
+- Logowanie z innego ekranu: `/sign-in?next=<ścieżka>`; honorujemy tylko ścieżki zaczynające się od pojedynczego `/`. Bramka `Stack.Protected` sama odsyła na `/`. `SignInScreen` sprawdza rolę tuż po zalogowaniu i dla staffu ignoruje `next` (idzie na `/`, a layout gościa przekierowuje dalej do konsoli) – inaczej staff mógłby wylądować na ekranie klienta.
+- **Routing wg roli w layoucie, nie w ekranie**: `(tabs)/_layout.tsx` renderuje `<Redirect>` do konsoli dla staffu, zanim cokolwiek innego się zamontuje. Staff nigdy nie widzi zakładek gościa (na webie też) – ekran gościa nie musi sam sprawdzać `isStaff`.
+- **Ekran osadzony w innej powłoce** (np. `ProfileScreen` używany też pod `/account` w konsoli) dostaje prop `embedded`, nie sprawdza trasy – dzięki temu może pominąć to, co host już zapewnia (górny safe-area przez `Screen`'s `topInset`, zbędny przycisk). Wolimy to od duplikowania ekranu dla drugiego hosta.
+- **Web ma własny topbar** (`features/navigation/GuestTopNav.tsx`) zamiast paska zakładek z Expo Router (`<Tabs>`), który na desktopie wygląda jak rozciągnięty pasek mobilny. Natywnie zostaje `<Tabs>` bez zmian. Poniżej 640px topbar chowa etykiety do samych ikon.
 - Metro: `tslib` przypięty do wersji CommonJS (`metro.config.js`), inaczej zależności Moti wywracają render webowy; Jest transformuje `moti` (`jest.config.js`).
 - Po zmianach w kodzie frontendu weryfikujemy przepływ w prawdziwej przeglądarce z prawdziwym backendem (Metro potrafi serwować starą paczkę – restart z `--clear`).
-- **Konsola staffu**: reguły (stan stolika w danej chwili, dozwolone przeniesienia, dozwolone przejścia statusu) żyją w `features/staff/floor.ts` – czysta logika, testowana jednostkowo; ekrany tylko ją renderują. Odświeżanie co `POLL_MS` (`features/staff/hooks.ts`).
+- **Konsola staffu**: reguły (stan stolika w danej chwili, dozwolone przeniesienia, dozwolone przejścia statusu, liczby dnia) żyją w `features/staff/floor.ts` – czysta logika, testowana jednostkowo; ekrany tylko ją renderują. Odświeżanie co `POLL_MS` (`features/staff/hooks.ts`).
+- **Nawigacja konsoli (`StaffNav`) żyje raz, w `(staff)/_layout.tsx`**, wokół `Slot`, i sama wyznacza aktywną zakładkę z trasy (`usePathname`), a nie z propa – wcześniejszy błąd polegał dokładnie na tym, że każdy ekran renderował własną kopię nawigacji, więc zmiana ekranu ją odmontowywała. Nowy ekran pod `(staff)/` dostaje nawigację za darmo – nie renderuje własnej.
 - **Gesty** (`SwipeRow`) działają na wątku JS (`.runOnJS(true)`), żeby wprost wołać stan Reacta i haptykę. Kliknięcie kończące przeciągnięcie (`click` po `mouseup`/dotknięciu) to nie jest tap – komponenty wewnątrz `SwipeRow` sprawdzają to przez `useJustSwiped()`. Każda akcja gestu musi być też osiągalna bez niego (przyciski, `accessibilityActions`).
 - **Splash zostaje**, dopóki nie jest znany stan sesji (nie tylko czcionki) – `app/_layout.tsx`, `SESSION_WAIT_MS`. Bramki (`Stack.Protected`) czytają stan auth; schowanie splasha przed odpowiedzią odsyła przeładowany deep link (`/floor`, `/sign-in`) na `/`.
 
@@ -192,9 +196,9 @@ tableflow/
         │   ├── _layout.tsx           # providery, fonty, splash, bramki (Stack.Protected)
         │   ├── +html.tsx             # HTML dla statycznego webu (tło bez „flasha”)
         │   ├── +not-found.tsx
-        │   ├── (tabs)/               # gość: index (Explore), reservations, profile
+        │   ├── (tabs)/               # gość: index (Explore), reservations, profile (przekierowuje staff dalej)
         │   ├── (auth)/sign-in.tsx    # modal, tylko gdy niezalogowany
-        │   ├── (staff)/              # tylko staff/admin: today.tsx (lista dnia), floor.tsx (plan sali)
+        │   ├── (staff)/              # tylko staff/admin: today, floor, account (stała powłoka + nawigacja)
         │   ├── restaurant/[id].tsx   # rezerwacja stolika (BookingScreen)
         │   ├── reservation/[id].tsx  # szczegóły rezerwacji
         │   └── confirmed.tsx         # potwierdzenie rezerwacji
@@ -202,8 +206,9 @@ tableflow/
         │   ├── auth/                 # AuthProvider, SignInScreen, ProfileScreen
         │   ├── restaurants/          # ExploreScreen (+ filtr miasta, data/goście), hooki, godziny otwarcia
         │   ├── reservations/         # BookingScreen, ReservationsScreen, szczegóły, potwierdzenie, RescheduleSheet, sloty/pickery
-        │   └── staff/                # floor.ts (czysta logika), StaffScope, hooki, FloorScreen, TodayScreen,
-        │                             #   ReservationPanel, MovePanel, NewReservationSheet, StaffNav, useHotkeys, useNow
+        │   ├── staff/                # floor.ts (czysta logika, w tym dayStats), StaffScope, hooki, FloorScreen, TodayScreen,
+        │   │                         #   DayStats, ReservationPanel, MovePanel, NewReservationSheet, StaffNav, useHotkeys, useNow
+        │   └── navigation/           # GuestTopNav – topbar gościa na webie
         ├── components/ui/            # design system: AppText, Button, Input, FilterChip, Badge, StatusChip,
         │                             #   Card, SegmentedControl, BottomSheet, ConfirmDialog, SwipeRow, TableTile, EmptyState, Screen, Icon
         ├── components/floor-plan/    # FloorPlan, FloorTile (kolor 220 ms + spring), TimeScrubber

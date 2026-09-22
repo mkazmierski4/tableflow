@@ -5,16 +5,17 @@ React Native app for iOS, Android and Web, built with [Expo](https://expo.dev) (
 ## What is here (Phase 4)
 
 - **Design system** in `src/components/ui` and `src/theme`: dark-slate and light themes as CSS variables, Bricolage Grotesque + DM Sans, text variants, buttons, inputs, filter chips, badges, cards, bottom sheet, confirm dialog, table tiles.
-- **Navigation** (Expo Router): guest tabs (Explore, Reservations, Profile), a sign-in modal, the booking screen, reservation details, a confirmation screen, and a staff area that only staff and admins can reach.
+- **Navigation** (Expo Router): guest tabs (Explore, Reservations, Profile — a persistent top bar on the web, the native bottom tabs on iOS/Android), a sign-in modal, the booking screen, reservation details, a confirmation screen, and a staff console that only staff and admins can reach. Staff never see the guest tabs at all: signing in, or opening any guest URL, sends them straight to the console.
 - **API layer** in `src/lib/api`: typed client generated from the backend's OpenAPI schema, error mapping, token storage (keychain on device, `localStorage` on web).
 - **Discovery:** search, city filter, "open now", and a date / party-size chip pair that carries over to the booking screen.
 - **Booking:** pick a day and a time from the restaurant's real slots (`/availability/slots`), see the free tables for that time with the best fit preselected, reserve. If someone takes the table in the meantime the screen says so, marks it and preselects the next best one.
 - **My reservations:** upcoming / past, details with the status lifecycle, reschedule (bottom sheet) and cancel (confirm dialog). Times are always shown in the restaurant's timezone.
 - **Motion:** animated confirmation (ring draw + spring check), staggered reveal; everything falls back to short fades with reduced motion.
-- **Staff console** (staff and admins; staff are bound to their restaurant, admins work on the first one):
-  - **Floor plan** (`/floor`, desktop layout with a side rail and a details column): every table as it is at the chosen moment (free, pending, confirmed, seated, done, no-show), a time scrubber in 30-minute steps, day navigation, guest search. Colour changes tween in 220 ms and a change of state gives the tile a small spring pulse. The data refreshes itself every 15 seconds while the screen is open.
+- **Staff console** (staff and admins; staff are bound to their restaurant, admins work on the first one). A persistent shell — a side rail (wide) or a bottom tab bar (phone), Today / Floor / Account — mounts once in `(staff)/_layout.tsx`; switching between them only swaps the content, so the nav never remounts or jumps.
+  - **Floor plan** (`/floor`, desktop layout with a side rail and a details column): every table as it is at the chosen moment (free, pending, confirmed, seated, done, no-show), a time scrubber in 30-minute steps, day navigation, guest search. Colour changes tween in 220 ms and a change of state gives the tile a small spring pulse. A day-at-a-glance strip (reservations today, awaiting reply, seated now, free now) and a table-size filter (the console has no notion of "zones", so tables are grouped by capacity) sit above the plan. The data refreshes itself every 15 seconds while the screen is open.
   - **Reservation panel:** the lifecycle actions the backend allows (confirm, seat, complete, no-show once started, cancel or decline behind a confirm dialog), move to another free table that fits the party, reschedule, and a new reservation for a walk-in (staff may start right now or up to an hour back).
   - **Today** (`/today`, the phone layout): the day as a list with All / Upcoming / Seated filters. Confirmed reservations can be swiped: right to seat, left to cancel (96 px threshold, a haptic tick when it is crossed). The same actions are exposed to assistive technology and reachable from the row's details, so nothing depends on the gesture.
+  - **Account** (`/account`): the same profile screen a guest sees, minus the redundant "open console" button, since the console's own nav is already on screen.
   - **Keyboard on the web:** `N` new reservation, `/` search, `S` seat, `C` complete, `←` `→` step the time, `Esc` close the panel, `Enter` confirm a move. Shortcuts do not fire while typing or with Ctrl/Meta/Alt held.
 
 ## Run it
@@ -73,13 +74,14 @@ The gestures, haptics and safe areas can only really be judged on a device. The 
 ```
 src/
 ├── app/                  Expo Router routes (thin: they only render a screen)
-│   ├── (tabs)/           guest tabs
+│   ├── (tabs)/           guest tabs (redirects staff to the console before rendering)
 │   ├── (auth)/sign-in    modal, only while signed out
-│   ├── (staff)/          only staff and admins: today (phone list), floor (desktop console)
+│   ├── (staff)/          only staff and admins: today, floor, account (persistent shell + nav)
 │   ├── restaurant/[id]   booking screen
 │   ├── reservation/[id]  reservation details
 │   └── confirmed         booking confirmation
 ├── features/             screens and logic per domain (auth, restaurants, reservations, staff)
+├── features/navigation/  GuestTopNav (the web-only top bar for the guest tabs)
 ├── components/ui/        design-system components (incl. ConfirmDialog, SwipeRow)
 ├── components/floor-plan/ FloorTile, FloorPlan, TimeScrubber
 ├── components/motion/    Reveal, SuccessMark
@@ -94,8 +96,11 @@ src/
 - **API contract:** the backend exports `backend/openapi.json`; run `npm run api:types` after an API change. CI fails when the generated types are stale.
 - **Accessibility:** roles, labels and states on every control; contrast of every text/surface pair is unit-tested; reduced motion turns movement into short fades. Express state with `aria-selected` / `aria-checked` / `aria-disabled` / `aria-busy`, not `accessibilityState`: react-native-web does not put the latter in the DOM, so screen readers on the web would never hear it.
 - **No pressable inside a pressable.** A card that is a button and also holds buttons is invalid HTML on web (and confusing for screen readers); make the summary the pressable and the actions its siblings.
-- **Signing in from another screen:** pass `next` (an in-app path) to `/sign-in`; only paths starting with a single `/` are honoured. The route guard would otherwise send a freshly signed-in guest to `/`.
-- **Staff console rules live in `features/staff/floor.ts`** (pure, unit-tested): which state a table is in at a moment, which tables a reservation can move to, which lifecycle actions are allowed. The screens only render them. The polling interval is `POLL_MS` in `features/staff/hooks.ts`.
+- **Signing in from another screen:** pass `next` (an in-app path) to `/sign-in`; only paths starting with a single `/` are honoured. `SignInScreen` checks the just-signed-in user's role and ignores `next` for staff, sending them to `/` instead — the tabs layout's redirect takes it from there, so a staff account never lands on a customer screen (e.g. a booking link followed before switching accounts).
+- **Role-based redirects live in the layout, not the screen.** `(tabs)/_layout.tsx` renders `<Redirect>` to the console for staff before anything else mounts; a screen that only makes sense for guests never has to check `isStaff` itself.
+- **A screen embedded in another shell** (e.g. `ProfileScreen` reused at `/account` inside the staff console) **takes an `embedded` prop**, not a route check, so it can drop what its host already provides — the top safe-area inset (`Screen`'s `topInset` prop) and any redundant call-to-action. Prefer this over duplicating a screen for a second host.
+- **Staff console rules live in `features/staff/floor.ts`** (pure, unit-tested): which state a table is in at a moment, which tables a reservation can move to, which lifecycle actions are allowed, the day-at-a-glance numbers. The screens only render them. The polling interval is `POLL_MS` in `features/staff/hooks.ts`.
+- **The console's nav (`StaffNav`) lives once in `(staff)/_layout.tsx`**, wrapping a `Slot`, and reads the active tab from the route itself (`usePathname`) rather than a prop passed down by each screen — the bug this replaced was exactly that: every screen rendering its own copy of the nav, so switching screens remounted it. A screen added under `(staff)/` gets the nav for free; it must not render its own.
 - **Gestures run on the JS thread** (`.runOnJS(true)`) so they can call React state and haptics directly; a drag is a few events per frame, which is fine here. Anything a gesture does must also be reachable without it.
 - **A press right after a drag is the browser's `click` on release, not a tap.** `SwipeRow` exposes `useJustSwiped()` so the row's own pressables can ignore that spurious press; wire it into every `onPress` inside a swipeable row (see `TodayScreen`'s `RowCard`).
 - **The splash stays up until the session is known**, not just until the fonts load (`app/_layout.tsx`, `SESSION_WAIT_MS`). Route guards (`Stack.Protected`) read the auth state; hiding the splash while it is still `loading` bounces a reloaded deep link (`/floor`, `/sign-in`) to `/` before the stored token has been checked.
