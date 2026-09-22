@@ -35,9 +35,26 @@ function createQueryClient() {
   });
 }
 
+/** How long the app waits for the session check before showing itself anyway. */
+const SESSION_WAIT_MS = 6000;
+
 function Navigator() {
   const { scheme } = useTheme();
   const { state, isStaff } = useAuth();
+
+  // The route guards below depend on who is signed in. While the stored session is still being
+  // checked they would all be false and bounce a deep link (a reloaded /floor, /sign-in) to `/`,
+  // so the splash stays up until the answer is known, with a limit for an unreachable server.
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setGaveUp(true), SESSION_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  const resolved = state.status !== 'loading' || gaveUp;
+  useEffect(() => {
+    if (resolved) void SplashScreen.hideAsync();
+  }, [resolved]);
+  if (!resolved) return null;
 
   return (
     <>
@@ -69,9 +86,6 @@ export default function RootLayout() {
   });
 
   const ready = fontsLoaded || fontError !== null;
-  useEffect(() => {
-    if (ready) void SplashScreen.hideAsync();
-  }, [ready]);
 
   // A font failure falls back to the system font rather than blocking the app.
   if (!ready) return null;
