@@ -1,4 +1,4 @@
-export { AppText } from './AppText';
+export { AppText, type TextTone } from './AppText';
 export { Badge } from './Badge';
 export { BottomSheet } from './BottomSheet';
 export { Button } from './Button';
@@ -12,3 +12,10 @@ export { Screen } from './Screen';
 export { SegmentedControl } from './SegmentedControl';
 export { StatusChip, type ReservationStatus } from './StatusChip';
 export { TableTile, type TileState } from './TableTile';
+export {
+  SwipeRow,
+  SWIPE_THRESHOLD,
+  swipeOutcome,
+  useJustSwiped,
+  type SwipeOutcome,
+} from './SwipeRow';

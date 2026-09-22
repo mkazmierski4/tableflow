@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
@@ -37,6 +37,8 @@ type ButtonProps = {
   disabled?: boolean;
   compact?: boolean;
   accessibilityHint?: string;
+  /** Keyboard shortcut, shown as a hint on the web (the screen binds the key itself). */
+  shortcut?: string;
   testID?: string;
   className?: string;
 };
@@ -44,6 +46,7 @@ type ButtonProps = {
 export function Button({
   label,
   onPress,
+  shortcut,
   variant = 'primary',
   icon,
   loading = false,
@@ -72,6 +75,7 @@ export function Button({
         accessibilityHint={accessibilityHint}
         aria-disabled={inactive}
         aria-busy={loading}
+        aria-keyshortcuts={shortcut}
         disabled={inactive}
         onPress={onPress}
         onPressIn={() => press(0.97)}
@@ -95,6 +99,13 @@ export function Button({
         <AppText variant="button" tone={TEXT_TONE[variant]}>
           {label}
         </AppText>
+        {shortcut && Platform.OS === 'web' ? (
+          <View aria-hidden className="border-current/30 rounded-md border px-1.5 py-0.5">
+            <AppText variant="badge" tone={TEXT_TONE[variant]}>
+              {shortcut}
+            </AppText>
+          </View>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
