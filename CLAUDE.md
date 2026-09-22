@@ -55,6 +55,9 @@ Projekt portfolio publikowany na GitHub – jakość kodu, historia commitów i 
 - Logowanie z innego ekranu: `/sign-in?next=<ścieżka>`; honorujemy tylko ścieżki zaczynające się od pojedynczego `/`. Bramka `Stack.Protected` sama odsyła na `/`.
 - Metro: `tslib` przypięty do wersji CommonJS (`metro.config.js`), inaczej zależności Moti wywracają render webowy; Jest transformuje `moti` (`jest.config.js`).
 - Po zmianach w kodzie frontendu weryfikujemy przepływ w prawdziwej przeglądarce z prawdziwym backendem (Metro potrafi serwować starą paczkę – restart z `--clear`).
+- **Konsola staffu**: reguły (stan stolika w danej chwili, dozwolone przeniesienia, dozwolone przejścia statusu) żyją w `features/staff/floor.ts` – czysta logika, testowana jednostkowo; ekrany tylko ją renderują. Odświeżanie co `POLL_MS` (`features/staff/hooks.ts`).
+- **Gesty** (`SwipeRow`) działają na wątku JS (`.runOnJS(true)`), żeby wprost wołać stan Reacta i haptykę. Kliknięcie kończące przeciągnięcie (`click` po `mouseup`/dotknięciu) to nie jest tap – komponenty wewnątrz `SwipeRow` sprawdzają to przez `useJustSwiped()`. Każda akcja gestu musi być też osiągalna bez niego (przyciski, `accessibilityActions`).
+- **Splash zostaje**, dopóki nie jest znany stan sesji (nie tylko czcionki) – `app/_layout.tsx`, `SESSION_WAIT_MS`. Bramki (`Stack.Protected`) czytają stan auth; schowanie splasha przed odpowiedzią odsyła przeładowany deep link (`/floor`, `/sign-in`) na `/`.
 
 ## Komendy
 
@@ -191,16 +194,19 @@ tableflow/
         │   ├── +not-found.tsx
         │   ├── (tabs)/               # gość: index (Explore), reservations, profile
         │   ├── (auth)/sign-in.tsx    # modal, tylko gdy niezalogowany
-        │   ├── (staff)/              # tylko staff/admin (Faza 4B: today, floor)
+        │   ├── (staff)/              # tylko staff/admin: today.tsx (lista dnia), floor.tsx (plan sali)
         │   ├── restaurant/[id].tsx   # rezerwacja stolika (BookingScreen)
         │   ├── reservation/[id].tsx  # szczegóły rezerwacji
         │   └── confirmed.tsx         # potwierdzenie rezerwacji
         ├── features/                 # ekrany i logika per domena
         │   ├── auth/                 # AuthProvider, SignInScreen, ProfileScreen
         │   ├── restaurants/          # ExploreScreen (+ filtr miasta, data/goście), hooki, godziny otwarcia
-        │   └── reservations/         # BookingScreen, ReservationsScreen, szczegóły, potwierdzenie, RescheduleSheet, sloty/pickery
+        │   ├── reservations/         # BookingScreen, ReservationsScreen, szczegóły, potwierdzenie, RescheduleSheet, sloty/pickery
+        │   └── staff/                # floor.ts (czysta logika), StaffScope, hooki, FloorScreen, TodayScreen,
+        │                             #   ReservationPanel, MovePanel, NewReservationSheet, StaffNav, useHotkeys, useNow
         ├── components/ui/            # design system: AppText, Button, Input, FilterChip, Badge, StatusChip,
-        │                             #   Card, SegmentedControl, BottomSheet, ConfirmDialog, TableTile, EmptyState, Screen, Icon
+        │                             #   Card, SegmentedControl, BottomSheet, ConfirmDialog, SwipeRow, TableTile, EmptyState, Screen, Icon
+        ├── components/floor-plan/    # FloorPlan, FloorTile (kolor 220 ms + spring), TimeScrubber
         ├── components/motion/        # Reveal, SuccessMark (Reanimated + Moti, z obsługą reduced motion)
         ├── theme/                    # tokens.ts (paleta + zmienne CSS), ThemeProvider (system/dark/light)
         └── lib/
@@ -217,5 +223,5 @@ tableflow/
 1. Setup FastAPI + baza + walidacja rezerwacji i anti-overbooking ✅
 2. Auth (JWT) + zarządzanie restauracjami, stolikami i statusami rezerwacji + CI ✅
 3. Inicjalizacja Expo + NativeWind + nawigacja + motyw + warstwa API ✅
-4. Rezerwacje gościa (4A ✅), plan sali i konsola staffu, animacje (Reanimated/Moti) (4B)
+4. Rezerwacje gościa (4A ✅), plan sali i konsola staffu, animacje (Reanimated/Moti) (4B ✅)
 5. Polish, skróty klawiszowe, CI, deployment
