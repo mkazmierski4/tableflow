@@ -1,0 +1,59 @@
+# Production-shaped compose: real secrets (backend/.env, never committed), no database port
+# published to the host, migrations run once before the app starts serving traffic.
+#
+#   cp backend/.env.example backend/.env   # then fill in SECRET_KEY, CORS_ORIGINS, etc.
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# This is still a single-host compose file, good for a small deployment or a demo box; a real
+# multi-instance deployment would put Postgres on managed infrastructure instead.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tableflow-db
+    restart: always
+    environment:
+      POSTGRES_USER: tableflow
+      POSTGRES_PASSWORD: tableflow
+      POSTGRES_DB: tableflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tableflow -d tableflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ./backend
+    container_name: tableflow-migrate
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tableflow:tableflow@db:5432/tableflow
+    depends_on:
+      db:
+        condition: service_healthy
+    command: alembic upgrade head
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: tableflow-backend
+    restart: always
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tableflow:tableflow@db:5432/tableflow
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

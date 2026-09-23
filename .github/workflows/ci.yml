@@ -1,0 +1,176 @@
+name: CI
+
+# Backend and frontend used to be two separate workflows (Backend CI / Frontend CI); they are
+# merged here into one "CI" pipeline with independent jobs, gated by which part of the repo
+# actually changed, so a backend-only change does not spend minutes rebuilding the frontend.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - 'backend/openapi.json'
+              - '.github/workflows/ci.yml'
+
+  backend:
+    name: Backend – lint, types & tests (Python ${{ matrix.python-version }})
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tableflow
+          POSTGRES_PASSWORD: tableflow
+          POSTGRES_DB: tableflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tableflow -d tableflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://tableflow:tableflow@localhost:5432/tableflow_test
+      TEST_POSTGRES_URL: postgresql+asyncpg://tableflow:tableflow@localhost:5432/tableflow_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (format)
+        run: ruff format --check .
+
+      - name: Mypy
+        run: mypy src
+
+      - name: Migrations apply cleanly on PostgreSQL
+        run: alembic upgrade head
+
+      - name: Models and migrations are in sync
+        run: alembic check
+
+      - name: Pytest (SQLite + PostgreSQL)
+        run: pytest -v
+
+  backend-docker:
+    name: Backend – Docker image builds
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build ./backend
+
+  frontend:
+    name: Frontend – types, lint, tests & web build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Bundles the whole app and generates the typed-route declarations that tsc needs.
+      - name: Web build (Metro + static rendering)
+        run: npx expo export --platform web
+        env:
+          CI: "1"
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npx eslint .
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: Jest
+        run: npm run test:ci
+
+      - name: API types match backend/openapi.json
+        run: |
+          npm run api:types
+          git diff --exit-code -- src/lib/api/schema.ts
+
+  # A single required status for branch protection, regardless of which jobs above actually ran.
+  ci:
+    name: CI
+    needs: [changes, backend, backend-docker, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
+            echo "A required job failed."
+            exit 1
+          fi
+          if [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "A required job was cancelled."
+            exit 1
+          fi
+          echo "All required jobs passed or were correctly skipped."

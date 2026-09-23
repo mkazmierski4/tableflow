@@ -1,8 +1,17 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
-import { AppText, EmptyState, FilterChip, Icon, Screen } from '@/components/ui';
+import {
+  AppText,
+  EmptyState,
+  FilterChip,
+  Icon,
+  Screen,
+  ShortcutsSheet,
+  type ShortcutGroup,
+} from '@/components/ui';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { DEFAULT_PARTY_SIZE, useBookingPrefs } from '@/features/reservations/BookingPrefs';
 import { formatDayKey, pluralGuests } from '@/features/reservations/format';
@@ -19,6 +28,17 @@ export function greeting(hour: number, name?: string | null): string {
   return name ? `${part}, ${name}` : part;
 }
 
+const SHORTCUT_GROUPS: ShortcutGroup[] = [
+  {
+    title: 'General',
+    items: [
+      { keys: ['/'], label: 'Search restaurants' },
+      { keys: ['Esc'], label: 'Close the open sheet' },
+      { keys: ['?'], label: 'Show this list' },
+    ],
+  },
+];
+
 export function ExploreScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -30,6 +50,8 @@ export function ExploreScreen() {
   const [query, setQuery] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dateGuestsOpen, setDateGuestsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const searchRef = useRef<TextInput>(null);
 
   const restaurants = useRestaurants(city);
   const cities = useCities();
@@ -50,6 +72,26 @@ export function ExploreScreen() {
     setQuery('');
   };
 
+  const anySheetOpen = sheetOpen || dateGuestsOpen;
+  useHotkeys(
+    {
+      '/': () => searchRef.current?.focus(),
+      'mod+k': () => searchRef.current?.focus(),
+      '?': () => setHelpOpen(true),
+    },
+    !anySheetOpen && !helpOpen,
+  );
+  useHotkeys(
+    {
+      Escape: () => {
+        setSheetOpen(false);
+        setDateGuestsOpen(false);
+      },
+    },
+    anySheetOpen,
+  );
+  useHotkeys({ Escape: () => setHelpOpen(false) }, helpOpen);
+
   return (
     <Screen refreshing={restaurants.isRefetching} onRefresh={() => void restaurants.refetch()}>
       <View className="gap-1">
@@ -64,6 +106,7 @@ export function ExploreScreen() {
       <View className="h-[52px] flex-row items-center gap-2.5 rounded-button border border-line bg-surface px-4">
         <Icon name="search" size={20} color="muted" />
         <TextInput
+          ref={searchRef}
           accessibilityLabel="Search restaurants"
           placeholder="Search restaurants"
           placeholderTextColor={colors.muted}
@@ -73,6 +116,17 @@ export function ExploreScreen() {
           autoCorrect={false}
           className="flex-1 font-sans text-base text-fg"
         />
+        {Platform.OS === 'web' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Keyboard shortcuts"
+            aria-keyshortcuts="?"
+            onPress={() => setHelpOpen(true)}
+            className="h-8 w-8 items-center justify-center rounded-full active:bg-raised"
+          >
+            <Icon name="help" size={18} color="muted" />
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Same chip row as the design: horizontally scrollable, city first. */}
@@ -165,6 +219,12 @@ export function ExploreScreen() {
           setSheetOpen(false);
         }}
         onClose={() => setSheetOpen(false)}
+      />
+
+      <ShortcutsSheet
+        visible={helpOpen}
+        groups={SHORTCUT_GROUPS}
+        onClose={() => setHelpOpen(false)}
       />
     </Screen>
   );

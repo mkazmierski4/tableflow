@@ -11,6 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 import { AppText, type TextTone } from './AppText';
 import { Icon, type IconName } from './Icon';
+import { Kbd } from './Kbd';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 
@@ -100,10 +101,8 @@ export function Button({
           {label}
         </AppText>
         {shortcut && Platform.OS === 'web' ? (
-          <View aria-hidden className="border-current/30 rounded-md border px-1.5 py-0.5">
-            <AppText variant="badge" tone={TEXT_TONE[variant]}>
-              {shortcut}
-            </AppText>
+          <View aria-hidden>
+            <Kbd tone={TEXT_TONE[variant]}>{shortcut}</Kbd>
           </View>
         ) : null}
       </Pressable>

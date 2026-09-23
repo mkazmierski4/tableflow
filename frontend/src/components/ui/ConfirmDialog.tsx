@@ -1,5 +1,11 @@
 import { Modal, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, ZoomIn, useReducedMotion } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  useReducedMotion,
+} from 'react-native-reanimated';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { themeVars } from '@/theme/tokens';
@@ -62,7 +68,7 @@ export function ConfirmDialog({
           }}
         />
         <Animated.View
-          entering={reduceMotion ? FadeIn.duration(120) : ZoomIn.duration(180)}
+          entering={reduceMotion ? FadeIn.duration(120) : ZoomIn.duration(240).easing(Easing.ease)}
           accessibilityRole="alert"
           style={{
             width: '100%',

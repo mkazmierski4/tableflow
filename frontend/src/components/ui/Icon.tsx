@@ -68,6 +68,15 @@ const PATHS = {
       <Rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" />
     </>
   ),
+  help: (
+    <>
+      <Circle cx="12" cy="12" r="9" />
+      <Path d="M9.5 9.2a2.5 2.5 0 1 1 3.7 2.2c-.8.5-1.2 1-1.2 2" />
+      {/* A zero-length, round-capped stroke draws a filled dot — the standard trick for a
+          question mark's point without needing a per-instance fill colour in a static path set. */}
+      <Path d="M12 17.01v.01" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;

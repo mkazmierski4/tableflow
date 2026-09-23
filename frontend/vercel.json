@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/restaurant/:id", "destination": "/restaurant/[id].html" },
+    { "source": "/reservation/:id", "destination": "/reservation/[id].html" },
+    { "source": "/((?!.*\\.).*)", "destination": "/+not-found.html" }
+  ]
+}

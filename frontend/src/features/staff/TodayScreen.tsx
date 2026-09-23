@@ -9,10 +9,13 @@ import {
   EmptyState,
   FilterChip,
   Icon,
+  ShortcutsSheet,
   StatusChip,
   SwipeRow,
   useJustSwiped,
+  type ShortcutGroup,
 } from '@/components/ui';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { formatDateLong, formatTime, pluralGuests } from '@/features/reservations/format';
 import { RescheduleSheet } from '@/features/reservations/RescheduleSheet';
 import { ApiError, type Reservation } from '@/lib/api';
@@ -47,6 +50,20 @@ const inFilter = (r: Reservation, filter: Filter) =>
     : filter === 'upcoming'
       ? r.status === 'pending' || r.status === 'confirmed'
       : r.status !== 'cancelled';
+
+const SHORTCUT_GROUPS: ShortcutGroup[] = [
+  {
+    title: 'General',
+    items: [
+      { keys: ['N'], label: 'New reservation' },
+      { keys: ['1'], label: 'Show all' },
+      { keys: ['2'], label: 'Show upcoming' },
+      { keys: ['3'], label: 'Show seated' },
+      { keys: ['Esc'], label: 'Close the open reservation' },
+      { keys: ['?'], label: 'Show this list' },
+    ],
+  },
+];
 
 export function TodayScreen() {
   const { restaurantId, isAdmin } = useStaffScope();
@@ -84,6 +101,7 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const all = useMemo(
     () => [...(day.data ?? [])].sort((a, b) => a.start_at.localeCompare(b.start_at)),
@@ -132,6 +150,20 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
     setMode('details');
     setNotice(null);
   };
+
+  const overlayOpen = pending !== null || rescheduling !== null || creating || helpOpen;
+  useHotkeys(
+    {
+      n: () => setCreating(true),
+      '1': () => setFilter('all'),
+      '2': () => setFilter('upcoming'),
+      '3': () => setFilter('seated'),
+      '?': () => setHelpOpen(true),
+      Escape: closePanel,
+    },
+    !overlayOpen,
+  );
+  useHotkeys({ Escape: () => setHelpOpen(false) }, helpOpen);
 
   const dayLabel = zone ? formatDateLong(`${dayKey}T12:00:00Z`, 'UTC') : '';
 
@@ -287,6 +319,12 @@ function TodayList({ restaurantId }: { restaurantId: number }) {
         durationMinutes={restaurant.data?.default_duration_minutes ?? 90}
         zone={zone ?? 'UTC'}
         presetTableId={null}
+      />
+
+      <ShortcutsSheet
+        visible={helpOpen}
+        groups={SHORTCUT_GROUPS}
+        onClose={() => setHelpOpen(false)}
       />
     </View>
   );

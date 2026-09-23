@@ -529,3 +529,28 @@ describe('staying current', () => {
     }
   });
 });
+
+describe('keyboard shortcuts help', () => {
+  it('opens from the header button on the wide layout and lists every binding', async () => {
+    mockWide = true;
+    await renderFloor();
+    await tile('T1');
+
+    fireEvent.press(screen.getByRole('button', { name: 'Keyboard shortcuts' }));
+
+    expect(await screen.findByText('Keyboard shortcuts')).toBeTruthy();
+    expect(screen.getByText('Search guests')).toBeTruthy();
+    expect(screen.getByText('Seat guests (confirmed reservation)')).toBeTruthy();
+    expect(screen.getByText('Close the panel')).toBeTruthy();
+
+    fireEvent.press(screen.getAllByRole('button', { name: 'Close' })[0]!);
+    await waitFor(() => expect(screen.queryByText('Search guests')).toBeNull());
+  });
+
+  it('is not offered on the phone layout (there is no room, and no keyboard)', async () => {
+    await renderFloor();
+    await tile('T1');
+
+    expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
+  });
+});

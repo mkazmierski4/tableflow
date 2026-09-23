@@ -1,0 +1,21 @@
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+# Static routes (index, today, floor, account, reservations, sign-in, confirmed, profile) already
+# have a matching .html file at the top level, which Netlify resolves on its own. Only the two
+# dynamic routes need an explicit rewrite to the file Expo's static export names after the segment.
+[[redirects]]
+  from = "/restaurant/:id"
+  to = "/restaurant/[id].html"
+  status = 200
+
+[[redirects]]
+  from = "/reservation/:id"
+  to = "/reservation/[id].html"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/+not-found.html"
+  status = 404

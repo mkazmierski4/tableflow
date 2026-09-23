@@ -6,7 +6,7 @@ import { formatRange, pluralGuests } from '@/features/reservations/format';
 import type { DiningTable, Reservation } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
-import { useHotkeys } from './useHotkeys';
+import { useHotkeys } from '@/hooks/useHotkeys';
 
 type MovePanelProps = {
   reservation: Reservation;

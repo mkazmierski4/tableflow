@@ -11,6 +11,8 @@ import {
   EmptyState,
   FilterChip,
   Icon,
+  ShortcutsSheet,
+  type ShortcutGroup,
   type TileState,
 } from '@/components/ui';
 import { formatDateLong, formatTime, pluralGuests } from '@/features/reservations/format';
@@ -38,7 +40,7 @@ import { NewReservationSheet } from './NewReservationSheet';
 import { ReservationPanel } from './ReservationPanel';
 import { useIsWide } from './StaffNav';
 import { useStaffScope } from './StaffScope';
-import { useHotkeys } from './useHotkeys';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { useNow } from './useNow';
 
 const LEGEND: { state: TileState; label: string; color: string }[] = [
@@ -53,6 +55,33 @@ const CONFIRM_COPY: Record<string, { title: string; confirm: string }> = {
   cancelled: { title: 'Cancel this reservation?', confirm: 'Cancel reservation' },
   no_show: { title: 'Mark as no-show?', confirm: 'Mark no-show' },
 };
+
+const SHORTCUT_GROUPS: ShortcutGroup[] = [
+  {
+    title: 'General',
+    items: [
+      { keys: ['N'], label: 'New reservation' },
+      { keys: ['/'], label: 'Search guests' },
+      { keys: ['?'], label: 'Show this list' },
+    ],
+  },
+  {
+    title: 'Time',
+    items: [
+      { keys: ['←'], label: 'Step to the previous half hour' },
+      { keys: ['→'], label: 'Step to the next half hour' },
+    ],
+  },
+  {
+    title: 'Selected table',
+    items: [
+      { keys: ['S'], label: 'Seat guests (confirmed reservation)' },
+      { keys: ['C'], label: 'Mark completed (seated reservation)' },
+      { keys: ['Enter'], label: 'Confirm a move' },
+      { keys: ['Esc'], label: 'Close the panel' },
+    ],
+  },
+];
 
 export function FloorScreen() {
   const { restaurantId, isAdmin } = useStaffScope();
@@ -94,6 +123,7 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
   const [capacityFilter, setCapacityFilter] = useState<number | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const today = zone ? localDayKey(now, zone) : null;
   const dayKey = today ? shiftDay(today, dayOffset) : null;
@@ -189,11 +219,13 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
     );
   };
 
-  const overlayOpen = pending !== null || rescheduling !== null || creating;
+  const overlayOpen = pending !== null || rescheduling !== null || creating || helpOpen;
   useHotkeys(
     {
       n: () => setCreating(true),
       '/': () => searchRef.current?.focus(),
+      'mod+k': () => searchRef.current?.focus(),
+      '?': () => setHelpOpen(true),
       s: () => hotkeyAction('S'),
       c: () => hotkeyAction('C'),
       ArrowLeft: () => setManualStep(Math.max(0, index - 1)),
@@ -202,6 +234,7 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
     },
     !overlayOpen,
   );
+  useHotkeys({ Escape: () => setHelpOpen(false) }, helpOpen);
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -350,6 +383,17 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
           ) : null}
         </View>
       ) : null}
+      {wide ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Keyboard shortcuts"
+          aria-keyshortcuts="?"
+          onPress={() => setHelpOpen(true)}
+          className="h-11 w-11 items-center justify-center rounded-button border border-line bg-surface"
+        >
+          <Icon name="help" size={18} color="fg2" />
+        </Pressable>
+      ) : null}
       <View>
         <Button
           label={wide ? 'New reservation' : 'New'}
@@ -436,7 +480,7 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
         <TimeScrubber labels={labels} index={index} onChange={setManualStep} />
         {wide ? (
           <AppText variant="caption" className="pt-2">
-            ← → step 30 min · Esc close panel
+            ← → step 30 min · Esc close panel · ? all shortcuts
           </AppText>
         ) : null}
       </View>
@@ -525,6 +569,12 @@ function FloorConsole({ restaurantId }: { restaurantId: number }) {
         durationMinutes={restaurant.data?.default_duration_minutes ?? 90}
         zone={zone ?? 'UTC'}
         presetTableId={selected && !selected.reservation ? selected.table.id : null}
+      />
+
+      <ShortcutsSheet
+        visible={helpOpen}
+        groups={SHORTCUT_GROUPS}
+        onClose={() => setHelpOpen(false)}
       />
     </>
   );

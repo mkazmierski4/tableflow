@@ -1,7 +1,6 @@
 # TableFlow
 
-[![Backend CI](https://github.com/mkazmierski4/tableflow/actions/workflows/backend.yml/badge.svg)](https://github.com/mkazmierski4/tableflow/actions/workflows/backend.yml)
-[![Frontend CI](https://github.com/mkazmierski4/tableflow/actions/workflows/frontend.yml/badge.svg)](https://github.com/mkazmierski4/tableflow/actions/workflows/frontend.yml)
+[![CI](https://github.com/mkazmierski4/tableflow/actions/workflows/ci.yml/badge.svg)](https://github.com/mkazmierski4/tableflow/actions/workflows/ci.yml)
 
 **Modern Restaurant Reservation & Table Management System**
 
@@ -199,15 +198,35 @@ Run the backend first (`http://localhost:8000`). See [`frontend/README.md`](fron
 docker compose up --build       # applies migrations, then serves http://localhost:8000
 ```
 
+## Deployment
+
+**Backend (Docker, production-shaped):** `docker-compose.prod.yml` is a separate file from the dev
+`docker-compose.yml` above — it reads real secrets from `backend/.env` (never `.env.example`),
+does not publish PostgreSQL's port to the host, and runs migrations as a one-off step before the
+app starts serving traffic.
+
+```bash
+cp backend/.env.example backend/.env   # fill in a real SECRET_KEY and CORS_ORIGINS
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+The image itself (`backend/Dockerfile`) is a multi-stage build: a builder stage compiles the
+virtualenv, the runtime stage copies just that venv and the source, runs as a non-root user, and
+declares a `HEALTHCHECK` against `/api/v1/health`. `WEB_CONCURRENCY` controls the number of
+uvicorn workers (default 1; `docker-compose.prod.yml` sets 2).
+
+**Frontend (static web export):** `npx expo export --platform web` produces a static site in
+`frontend/dist/`; `frontend/vercel.json` and `frontend/netlify.toml` both point the build command
+and output directory there and add the two rewrites a static host needs for the app's dynamic
+routes (`/restaurant/:id`, `/reservation/:id`) — every other route already has a matching
+top-level `.html` file. Point either platform at the `frontend/` directory and it picks up its own
+config file; set `EXPO_PUBLIC_API_URL` to the deployed backend's URL as a build-time environment
+variable. The native apps (iOS/Android) are not part of this deployment path — see
+[`frontend/README.md`](frontend/README.md) for running them via Expo Go or a development build.
 
 ## Roadmap
 
-- [x] **Phase 0** – Project structure and documentation
-- [x] **Phase 1** – FastAPI + database setup, reservation validation and anti-double-booking
-- [x] **Phase 2** – Authentication (JWT), restaurants and tables management
-- [x] **Phase 3** – Expo + NativeWind app shell, navigation, theming, API layer
-- [x] **Phase 4** – Booking flow (4A), staff floor plan and day list with Reanimated/Moti animations and keyboard shortcuts (4B)
-- [ ] **Phase 5** – Polish, frontend CI, deployment
+See [ROADMAP.md](ROADMAP.md).
 
 ## Conventions
 

@@ -84,8 +84,11 @@ python -m src.cli export-openapi   # odśwież backend/openapi.json po zmianie A
 ```
 
 ### CI
-`.github/workflows/backend.yml`: ruff, mypy, migracje + `alembic check` na PostgreSQL oraz pytest na SQLite i PostgreSQL (Python 3.11 i 3.13), plus build obrazu Docker.
-`.github/workflows/frontend.yml`: build web (Metro), `tsc`, ESLint, Prettier, Jest oraz sprawdzenie, że wygenerowane typy API zgadzają się z `backend/openapi.json`.
+Jeden workflow, `.github/workflows/ci.yml`, z zadaniami uruchamianymi tylko gdy zmieniła się odpowiednia część repo (`dorny/paths-filter`):
+- **backend**: ruff, mypy, migracje + `alembic check` na PostgreSQL oraz pytest na SQLite i PostgreSQL (Python 3.11 i 3.13).
+- **backend-docker**: build obrazu Docker.
+- **frontend**: build web (Metro), `tsc`, ESLint, Prettier, Jest oraz sprawdzenie, że wygenerowane typy API zgadzają się z `backend/openapi.json`.
+- **ci**: zbiorczy status wymagany do ochrony gałęzi, zielony gdy żadne z uruchomionych zadań nie padło.
 
 ### Frontend
 ```bash
@@ -114,19 +117,21 @@ docker compose down -v            # zatrzymaj i usuń wolumeny
 tableflow/
 ├── CLAUDE.md
 ├── README.md
+├── ROADMAP.md                       # status faz (Faza 0 … Faza 5)
 ├── .gitignore
 ├── .gitattributes
-├── docker-compose.yml
+├── docker-compose.yml                # dev: backend + PostgreSQL, zero-config (.env.example)
+├── docker-compose.prod.yml           # prod: backend/.env, bez portu DB na hosta, migracje jako osobny krok
 ├── .github/
 │   └── workflows/
-│       ├── backend.yml              # CI: ruff, mypy, migracje, pytest (SQLite + PostgreSQL)
-│       └── frontend.yml             # CI: build web, tsc, ESLint, Prettier, Jest, zgodność typów API
+│       └── ci.yml                   # CI: backend (ruff, mypy, migracje, pytest) + frontend (build, tsc, ESLint, Prettier, Jest) wg zmienionych ścieżek
 ├── backend/
 │   ├── .env.example
 │   ├── requirements.txt
 │   ├── openapi.json                 # kontrakt API (python -m src.cli export-openapi) → typy frontendu
 │   ├── pyproject.toml               # ruff, mypy, pytest
-│   ├── Dockerfile
+│   ├── Dockerfile                   # multi-stage, użytkownik non-root, HEALTHCHECK, WEB_CONCURRENCY
+│   ├── .dockerignore
 │   ├── alembic.ini
 │   ├── alembic/                     # migracje
 │   │   └── versions/                # 0001 schemat + exclusion constraint (PG), 0002 users + user_id, 0003 restaurant city
@@ -188,6 +193,8 @@ tableflow/
     ├── jest.config.js
     ├── jest.setup.ts                 # mocki: async-storage, secure-store, worklets, reanimated
     ├── .env.example                  # EXPO_PUBLIC_API_URL
+    ├── vercel.json                    # build web + przepisania dla /restaurant/:id, /reservation/:id
+    ├── netlify.toml                   # to samo dla Netlify
     ├── assets/
     └── src/
         ├── global.css                # wejście Tailwind (NativeWind)
@@ -229,4 +236,4 @@ tableflow/
 2. Auth (JWT) + zarządzanie restauracjami, stolikami i statusami rezerwacji + CI ✅
 3. Inicjalizacja Expo + NativeWind + nawigacja + motyw + warstwa API ✅
 4. Rezerwacje gościa (4A ✅), plan sali i konsola staffu, animacje (Reanimated/Moti) (4B ✅)
-5. Polish, skróty klawiszowe, CI, deployment
+5. Polish, skróty klawiszowe, CI, deployment ✅

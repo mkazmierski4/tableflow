@@ -1,9 +1,19 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
-import { AppText, ConfirmDialog, EmptyState, Screen, SegmentedControl } from '@/components/ui';
+import {
+  AppText,
+  ConfirmDialog,
+  EmptyState,
+  Icon,
+  Screen,
+  SegmentedControl,
+  ShortcutsSheet,
+  type ShortcutGroup,
+} from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import type { Reservation } from '@/lib/api';
 
 import { formatDate, formatRange } from './format';
@@ -19,6 +29,18 @@ const TABS = [
   { value: 'past', label: 'Past' },
 ] as const;
 
+const SHORTCUT_GROUPS: ShortcutGroup[] = [
+  {
+    title: 'General',
+    items: [
+      { keys: ['1'], label: 'Show upcoming' },
+      { keys: ['2'], label: 'Show past' },
+      { keys: ['Esc'], label: 'Close the open dialog or sheet' },
+      { keys: ['?'], label: 'Show this list' },
+    ],
+  },
+];
+
 export function ReservationsScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -29,6 +51,7 @@ export function ReservationsScreen() {
   const [cancelling, setCancelling] = useState<Reservation | null>(null);
   const [rescheduling, setRescheduling] = useState<Reservation | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const { upcoming, past } = useMemo(
     () => splitReservations(reservations.data?.items ?? []),
@@ -44,6 +67,26 @@ export function ReservationsScreen() {
       onSettled: () => setCancelling(null),
     });
   };
+
+  const overlayOpen = cancelling !== null || rescheduling !== null || helpOpen;
+  useHotkeys(
+    {
+      '1': () => setTab('upcoming'),
+      '2': () => setTab('past'),
+      '?': () => setHelpOpen(true),
+    },
+    !!user && !overlayOpen,
+  );
+  useHotkeys(
+    {
+      Escape: () => {
+        setCancelling(null);
+        setRescheduling(null);
+      },
+    },
+    cancelling !== null || rescheduling !== null,
+  );
+  useHotkeys({ Escape: () => setHelpOpen(false) }, helpOpen);
 
   if (!user) {
     return (
@@ -65,9 +108,22 @@ export function ReservationsScreen() {
 
   return (
     <Screen refreshing={reservations.isRefetching} onRefresh={() => void reservations.refetch()}>
-      <AppText variant="display" accessibilityRole="header">
-        Reservations
-      </AppText>
+      <View className="flex-row items-center justify-between gap-2">
+        <AppText variant="display" accessibilityRole="header">
+          Reservations
+        </AppText>
+        {Platform.OS === 'web' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Keyboard shortcuts"
+            aria-keyshortcuts="?"
+            onPress={() => setHelpOpen(true)}
+            className="h-9 w-9 items-center justify-center rounded-full active:bg-raised"
+          >
+            <Icon name="help" size={18} color="muted" />
+          </Pressable>
+        ) : null}
+      </View>
       <SegmentedControl
         accessibilityLabel="Upcoming or past"
         options={TABS}
@@ -160,6 +216,12 @@ export function ReservationsScreen() {
           onDone={() => setNotice(null)}
         />
       ) : null}
+
+      <ShortcutsSheet
+        visible={helpOpen}
+        groups={SHORTCUT_GROUPS}
+        onClose={() => setHelpOpen(false)}
+      />
     </Screen>
   );
 }
