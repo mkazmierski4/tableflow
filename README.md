@@ -6,7 +6,7 @@
 
 An async REST API (FastAPI) and a cross-platform client (Web + iOS + Android via Expo) that lets guests book a table in seconds and gives restaurant staff a live view of the floor — with **guaranteed protection against double-booking**.
 
-> **Status:** Phase 4 – the backend is feature-complete (JWT auth with guest/staff/admin roles, restaurants and tables, availability slots, reservations with anti-double-booking, rescheduling, staff status lifecycle). The Expo app lets a guest discover restaurants, book a table from real availability (with graceful handling of a table taken in the meantime), and view, reschedule and cancel reservations; staff get a floor plan and a day list with keyboard shortcuts, polling and swipe gestures. Polish and deployment are next (see [Roadmap](#roadmap)).
+> **Status:** Feature-complete through Phase 5 (see [Roadmap](#roadmap)). The backend covers JWT auth with guest/staff/admin roles, restaurants and tables, availability slots, reservations with anti-double-booking, rescheduling and the staff status lifecycle. The Expo app lets a guest discover restaurants, book a table from real availability (with graceful handling of a table taken in the meantime), and view, reschedule and cancel reservations; staff get a floor plan and a day list with polling and swipe gestures. Both sides ship with a single CI pipeline and production-shaped deployment config (Docker, Vercel/Netlify).
 
 ---
 
@@ -203,10 +203,13 @@ docker compose up --build       # applies migrations, then serves http://localho
 **Backend (Docker, production-shaped):** `docker-compose.prod.yml` is a separate file from the dev
 `docker-compose.yml` above — it reads real secrets from `backend/.env` (never `.env.example`),
 does not publish PostgreSQL's port to the host, and runs migrations as a one-off step before the
-app starts serving traffic.
+app starts serving traffic. The Postgres password is not hard-coded: it comes from a root-level
+`.env` (Compose's own variable file, separate from `backend/.env`), and Compose refuses to start
+if it is unset.
 
 ```bash
 cp backend/.env.example backend/.env   # fill in a real SECRET_KEY and CORS_ORIGINS
+cp .env.example .env                   # fill in a real POSTGRES_PASSWORD
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
@@ -236,4 +239,4 @@ See [ROADMAP.md](ROADMAP.md).
 
 ## License
 
-TBD.
+[MIT](LICENSE)

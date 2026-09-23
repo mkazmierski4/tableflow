@@ -1,4 +1,4 @@
-# Szkielet środowiska: backend (FastAPI) + PostgreSQL.
+# Dev environment: backend (FastAPI) + PostgreSQL, zero-config (uses backend/.env.example).
 services:
   db:
     image: postgres:16-alpine

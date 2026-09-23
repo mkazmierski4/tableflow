@@ -2,7 +2,7 @@
 
 React Native app for iOS, Android and Web, built with [Expo](https://expo.dev) (SDK 57), Expo Router, NativeWind (Tailwind for React Native), Reanimated and Moti.
 
-## What is here (Phase 4)
+## What is here
 
 - **Design system** in `src/components/ui` and `src/theme`: dark-slate and light themes as CSS variables, Bricolage Grotesque + DM Sans, text variants, buttons, inputs, filter chips, badges, cards, bottom sheet, confirm dialog, table tiles.
 - **Navigation** (Expo Router): guest tabs (Explore, Reservations, Profile — a persistent top bar on the web, the native bottom tabs on iOS/Android), a sign-in modal, the booking screen, reservation details, a confirmation screen, and a staff console that only staff and admins can reach. Staff never see the guest tabs at all: signing in, or opening any guest URL, sends them straight to the console.
@@ -17,6 +17,7 @@ React Native app for iOS, Android and Web, built with [Expo](https://expo.dev) (
   - **Today** (`/today`, the phone layout): the day as a list with All / Upcoming / Seated filters. Confirmed reservations can be swiped: right to seat, left to cancel (96 px threshold, a haptic tick when it is crossed). The same actions are exposed to assistive technology and reachable from the row's details, so nothing depends on the gesture.
   - **Account** (`/account`): the same profile screen a guest sees, minus the redundant "open console" button, since the console's own nav is already on screen.
   - **Keyboard on the web:** `N` new reservation, `/` search, `S` seat, `C` complete, `←` `→` step the time, `Esc` close the panel, `Enter` confirm a move. Shortcuts do not fire while typing or with Ctrl/Meta/Alt held.
+- **Web keyboard shortcuts everywhere**, not just the staff console: `/` or `Ctrl`/`⌘`+`K` focuses search on Explore, `1`/`2` switch tabs on Reservations, `Esc` closes whatever sheet or dialog is open, and `?` opens a shortcuts overlay listing exactly what that screen binds (`components/ui/ShortcutsSheet`, driven by the same list each screen passes to it, so it cannot drift from the real bindings).
 
 ## Run it
 

@@ -122,6 +122,8 @@ tableflow/
 ├── .gitattributes
 ├── docker-compose.yml                # dev: backend + PostgreSQL, zero-config (.env.example)
 ├── docker-compose.prod.yml           # prod: backend/.env, bez portu DB na hosta, migracje jako osobny krok
+├── .env.example                      # zmienne dla docker-compose.prod.yml (POSTGRES_PASSWORD) – osobne od backend/.env
+├── LICENSE                            # MIT
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                   # CI: backend (ruff, mypy, migracje, pytest) + frontend (build, tsc, ESLint, Prettier, Jest) wg zmienionych ścieżek
